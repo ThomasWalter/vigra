@@ -63,3 +63,8 @@ VIGRA_ADD_NUMPY_MODULE(geometry SOURCES
 VIGRA_ADD_NUMPY_MODULE(optimization SOURCES
     optimization.cxx
   VIGRANUMPY)
+
+VIGRA_ADD_NUMPY_MODULE(morpho 
+  SOURCES
+    morpho.cxx
+  VIGRANUMPY)
