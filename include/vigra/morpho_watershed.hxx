@@ -16,119 +16,119 @@ namespace morpho{
 
 //template<class Image1>
 //template <int BIT_DEPTH>
-class BranchGraph
-{
-public:
-    typedef vigra::BImage img_type;
-    typedef std::map<unsigned, unsigned> label_map_type;
-
-    BranchGraph(img_type img) {
-
-    };
-}
-
-
-//template <int BIT_DEPTH>
-// class BranchContainer
-// {
-// public:
+//class BranchGraph
+//{
+//public:
+//    typedef vigra::BImage img_type;
+//    typedef std::map<unsigned, unsigned> label_map_type;
 //
-//   /**
-//    * load from file pair (RGB image, gray level image)
-//    */
-//   ImageMaskContainer(std::string img_filepath,
-//                      std::string msk_filepath,
-//                      int channel,
-//                      bool bRemoveBorderObjects=true)
-//       : Base()
-//   {
-//     this->bRemoveBorderObjects = bRemoveBorderObjects;
-template<class Iterator1, class Accessor1,
-     class Iterator2, class Accessor2,
-     class NBTYPE>
-int morphoBranchGraph(Iterator1 srcUpperLeft, Iterator1 srcLowerRight, Accessor1 srca,
-                      Iterator2 destUpperLeft, Accessor2 desta,
-                      NBTYPE & nbOffset)
-{
+//    BranchGraph(img_type img) {
+//
+//    };
+//}
+//
+//
+////template <int BIT_DEPTH>
+//// class BranchContainer
+//// {
+//// public:
+////
+////   /**
+////    * load from file pair (RGB image, gray level image)
+////    */
+////   ImageMaskContainer(std::string img_filepath,
+////                      std::string msk_filepath,
+////                      int channel,
+////                      bool bRemoveBorderObjects=true)
+////       : Base()
+////   {
+////     this->bRemoveBorderObjects = bRemoveBorderObjects;
+//template<class Iterator1, class Accessor1,
+//     class Iterator2, class Accessor2,
+//     class NBTYPE>
+//int morphoBranchGraph(Iterator1 srcUpperLeft, Iterator1 srcLowerRight, Accessor1 srca,
+//                      Iterator2 destUpperLeft, Accessor2 desta,
+//                      NBTYPE & nbOffset)
+//{
+////    int width  = srcLowerRight.x - srcUpperLeft.x;
+////    int height = srcLowerRight.y - srcUpperLeft.y;
+////
+////    typedef typename NBTYPE::ITERATORTYPE ITERATORTYPE;
+////    typedef typename NBTYPE::SIZETYPE SIZETYPE;
+////
+////    vigra::BasicImage<int> labBranch(width, height);
+////    vigra::BasicImage<int>::Iterator labUpperLeft = labBranch.upperLeft();
+////    vigra::BasicImage<int>::Accessor lab;
+////    typedef int LABTYPE;
+////
+////    // VALUETYPE is the data type for the input image
+////    typedef typename Accessor1::value_type VALUETYPE;
+////
+////    // bif contains the bifurcation points.
+////    vigra::BasicImage<VALUETYPE> bif(width, height);
+////    vigra::BasicImage<VALUETYPE>::Iterator bifUpperLeft = bif.upperLeft();
+////    vigra::BasicImage<VALUETYPE>::Accessor bifa;
+////
+////    morphoBifurcationPoints(srcUpperLeft, srcLowerRight, srca,
+////                            bifUpperLeft, bifa, nbOffset);
+////
+////
+////    // labBif
+////    vigra::BasicImage<int> labBif(width, height);
+////    vigra::BasicImage<int>::Iterator labBifUpperLeft = labBif.upperLeft();
+////
+////
+//    //typedef Pixel2D<VALUETYPE> PIX;
+//
+//    //vigra::BasicImage<>
+//    //morphoLabel(markerUpperLeft, markerLowerRight, marka,
+//    //            labUpperLeft, lab,
+//    //            nbOffset);
+//
+//    int BIF_CONDITION = 2;
+//
 //    int width  = srcLowerRight.x - srcUpperLeft.x;
 //    int height = srcLowerRight.y - srcUpperLeft.y;
 //
 //    typedef typename NBTYPE::ITERATORTYPE ITERATORTYPE;
 //    typedef typename NBTYPE::SIZETYPE SIZETYPE;
 //
-//    vigra::BasicImage<int> labBranch(width, height);
-//    vigra::BasicImage<int>::Iterator labUpperLeft = labBranch.upperLeft();
-//    vigra::BasicImage<int>::Accessor lab;
-//    typedef int LABTYPE;
+//    Diff2D o0(0,0);
 //
-//    // VALUETYPE is the data type for the input image
-//    typedef typename Accessor1::value_type VALUETYPE;
+//    for(o0.y = 0; o0.y < height; ++o0.y)
+//    {
+//      for(o0.x = 0; o0.x < width; ++o0.x)
+//      {
+//        if(srca(srcUpperLeft, o0) != 0)
+//        {
+//          int nb_neighbors=0;
 //
-//    // bif contains the bifurcation points.
-//    vigra::BasicImage<VALUETYPE> bif(width, height);
-//    vigra::BasicImage<VALUETYPE>::Iterator bifUpperLeft = bif.upperLeft();
-//    vigra::BasicImage<VALUETYPE>::Accessor bifa;
+//          // count the non-zero neighbors
+//          for(ITERATORTYPE iter = nbOffset.begin();
+//              iter != nbOffset.end();
+//              ++iter)
+//          {
+//            Diff2D o1 = o0 + *iter;
 //
-//    morphoBifurcationPoints(srcUpperLeft, srcLowerRight, srca,
-//                            bifUpperLeft, bifa, nbOffset);
+//            // if the neighbor is not outside the image
+//            if(!nbOffset.isOutsidePixel(o1))
+//            {
+//              if(srca(srcUpperLeft,o1) != 0)
+//              {
+//                nb_neighbors++;
+//              }
+//            }
+//          }
 //
-//
-//    // labBif
-//    vigra::BasicImage<int> labBif(width, height);
-//    vigra::BasicImage<int>::Iterator labBifUpperLeft = labBif.upperLeft();
-//
-//
-    //typedef Pixel2D<VALUETYPE> PIX;
-
-    //vigra::BasicImage<>
-    //morphoLabel(markerUpperLeft, markerLowerRight, marka,
-    //            labUpperLeft, lab,
-    //            nbOffset);
-
-    int BIF_CONDITION = 2;
-
-    int width  = srcLowerRight.x - srcUpperLeft.x;
-    int height = srcLowerRight.y - srcUpperLeft.y;
-
-    typedef typename NBTYPE::ITERATORTYPE ITERATORTYPE;
-    typedef typename NBTYPE::SIZETYPE SIZETYPE;
-
-    Diff2D o0(0,0);
-
-    for(o0.y = 0; o0.y < height; ++o0.y)
-    {
-      for(o0.x = 0; o0.x < width; ++o0.x)
-      {
-        if(srca(srcUpperLeft, o0) != 0)
-        {
-          int nb_neighbors=0;
-
-          // count the non-zero neighbors
-          for(ITERATORTYPE iter = nbOffset.begin();
-              iter != nbOffset.end();
-              ++iter)
-          {
-            Diff2D o1 = o0 + *iter;
-
-            // if the neighbor is not outside the image
-            if(!nbOffset.isOutsidePixel(o1))
-            {
-              if(srca(srcUpperLeft,o1) != 0)
-              {
-                nb_neighbors++;
-              }
-            }
-          }
-
-          // if the number of neighbors exceeds 2, the point is a bifurcation point
-          if(nb_neighbors>BIF_CONDITION) {
-            desta.set(srca(srcUpperLeft, o0), destUpperLeft, o0);
-          }
-        } // end if src has non-zero pixel
-      } // end x-loop
-    } // end y-loop
-  return(0);
-} // end of function
+//          // if the number of neighbors exceeds 2, the point is a bifurcation point
+//          if(nb_neighbors>BIF_CONDITION) {
+//            desta.set(srca(srcUpperLeft, o0), destUpperLeft, o0);
+//          }
+//        } // end if src has non-zero pixel
+//      } // end x-loop
+//    } // end y-loop
+//  return(0);
+//} // end of function
 
 
 template<class Iterator1, class Accessor1,
