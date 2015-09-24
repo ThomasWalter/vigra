@@ -46,7 +46,7 @@
 #ifdef VIGRA_CHECK_BOUNDS
 #define VIGRA_ASSERT_INSIDE(diff) \
   vigra_precondition(diff >= 0, "Index out of bounds");\
-  vigra_precondition((unsigned int)diff < size_, "Index out of bounds");
+  vigra_precondition(diff < (difference_type)size_, "Index out of bounds");
 #else
 #define VIGRA_ASSERT_INSIDE(diff)
 #endif
@@ -246,6 +246,20 @@ public:
         return data() + size();
     }
 
+        /** Get const iterator referring to the first array element.
+        */
+    inline const_iterator cbegin() const
+    {
+        return data();
+    }
+
+        /** Get const iterator pointing beyond the last array element.
+        */
+    inline const_iterator cend() const
+    {
+        return data() + size();
+    }
+
         /** Get reverse iterator referring to the last array element.
         */
     inline reverse_iterator rbegin()
@@ -270,6 +284,20 @@ public:
         /** Get const reverse iterator pointing before the first array element.
         */
     inline const_reverse_iterator rend() const
+    {
+        return (const_reverse_iterator(begin()));
+    }
+
+        /** Get const reverse iterator referring to the last array element.
+        */
+    inline const_reverse_iterator crbegin() const
+    {
+        return (const_reverse_iterator(end()));
+    }
+
+        /** Get const reverse iterator pointing before the first array element.
+        */
+    inline const_reverse_iterator crend() const
     {
         return (const_reverse_iterator(begin()));
     }
@@ -387,7 +415,7 @@ bool ArrayVectorView<T>::operator==(ArrayVectorView<U> const & rhs) const
 {
     if(size() != rhs.size())
         return false;
-    for(unsigned int k=0; k<size(); ++k)
+    for(size_type k=0; k<size(); ++k)
         if(data_[k] != rhs[k])
             return false;
     return true;
@@ -433,14 +461,14 @@ ArrayVectorView <T>::swapDataImpl(const ArrayVectorView <U>& rhs)
     // check for overlap
     if(data_ + size_ <= rhs.data_ || rhs.data_ + size_ <= data_)
     {
-        for(unsigned int k=0; k<size_; ++k)
+        for(size_type k=0; k<size_; ++k)
             std::swap(data_[k], rhs.data_[k]);
     }
     else
     {
         ArrayVector<T> t(*this);
         copyImpl(rhs);
-        rhs.copyImpl(*this);
+        rhs.copyImpl(t);
     }
 }
 
@@ -581,7 +609,7 @@ public:
 
     ~ArrayVector()
     {
-        deallocate(this->data_, this->size_);
+        deallocate(this->data_, this->size_, this->capacity_);
     }
 
     void pop_back();
@@ -601,9 +629,19 @@ public:
 
     void clear();
 
-    void reserve( size_type new_capacity );
+    pointer reserveImpl( bool dealloc, size_type new_capacity );
 
-    void reserve();
+    pointer reserveImpl( bool dealloc);
+
+    void reserve()
+    {
+        reserveImpl(true);
+    }
+
+    void reserve( size_type new_capacity )
+    {
+        reserveImpl(true, new_capacity);
+    }
 
     void resize( size_type new_size, value_type const & initial );
 
@@ -621,7 +659,7 @@ public:
 
   private:
 
-    void deallocate(pointer data, size_type size);
+    void deallocate(pointer data, size_type size, size_type capacity);
 
     pointer reserve_raw(size_type capacity);
 
@@ -664,15 +702,18 @@ inline void ArrayVector<T, Alloc>::pop_back()
 template <class T, class Alloc>
 inline void ArrayVector<T, Alloc>::push_back( value_type const & t )
 {
-    reserve();
+    pointer old_data = reserveImpl(false);
     alloc_.construct(this->data_ + this->size_, t);
+    // deallocate old data _after_ construction of new element, so that
+    // 't' can refer to the old data as in 'push_back(front())'
+    deallocate(old_data, this->size_, this->capacity_);
     ++this->size_;
 }
 
 template <class T, class Alloc>
 inline void ArrayVector<T, Alloc>::clear()
 {
-    detail::destroy_n(this->data_, (int)this->size_);
+    detail::destroy_n(this->data_, this->size_);
     this->size_ = 0;
 }
 
@@ -688,7 +729,8 @@ ArrayVector<T, Alloc>::insert(iterator p, value_type const & v)
     }
     else
     {
-        push_back(this->back());
+        T lastElement = this->back();
+        push_back(lastElement);
         p = this->begin() + pos;
         std::copy_backward(p, this->end() - 2, this->end() - 1);
         *p = v;
@@ -717,7 +759,7 @@ ArrayVector<T, Alloc>::insert(iterator p, size_type n, value_type const & v)
             alloc_.deallocate(new_data, new_capacity);
             throw;
         }
-        deallocate(this->data_, this->size_);
+        deallocate(this->data_, this->size_, this->capacity_);
         capacity_ = new_capacity;
         this->data_ = new_data;
     }
@@ -762,7 +804,7 @@ ArrayVector<T, Alloc>::insert(iterator p, InputIterator i, InputIterator iend)
             alloc_.deallocate(new_data, new_capacity);
             throw;
         }
-        deallocate(this->data_, this->size_);
+        deallocate(this->data_, this->size_, this->capacity_);
         capacity_ = new_capacity;
         this->data_ = new_data;
     }
@@ -807,27 +849,36 @@ ArrayVector<T, Alloc>::erase(iterator p, iterator q)
 }
 
 template <class T, class Alloc>
-inline void
-ArrayVector<T, Alloc>::reserve( size_type new_capacity )
+typename ArrayVector<T, Alloc>::pointer
+ArrayVector<T, Alloc>::reserveImpl( bool dealloc, size_type new_capacity)
 {
     if(new_capacity <= capacity_)
-        return;
-    pointer new_data = reserve_raw(new_capacity);
+        return 0;
+    pointer new_data = reserve_raw(new_capacity),
+            old_data = this->data_;
     if(this->size_ > 0)
-        std::uninitialized_copy(this->data_, this->data_+this->size_, new_data);
-    deallocate(this->data_, this->size_);
+        std::uninitialized_copy(old_data, old_data+this->size_, new_data);
     this->data_ = new_data;
-    capacity_ = new_capacity;
+    if(!dealloc)
+    {
+        this->capacity_ = new_capacity;
+        return old_data;
+    }
+    deallocate(old_data, this->size_, this->capacity_);
+    this->capacity_ = new_capacity;
+    return 0;
 }
 
 template <class T, class Alloc>
-inline void
-ArrayVector<T, Alloc>::reserve()
+inline typename ArrayVector<T, Alloc>::pointer
+ArrayVector<T, Alloc>::reserveImpl(bool dealloc)
 {
     if(capacity_ == 0)
-        reserve(minimumCapacity);
+        return reserveImpl(dealloc, minimumCapacity);
     else if(this->size_ == capacity_)
-        reserve(resizeFactor*capacity_);
+        return reserveImpl(dealloc, resizeFactor*capacity_);
+    else
+        return 0;
 }
 
 template <class T, class Alloc>
@@ -876,12 +927,12 @@ ArrayVector<T, Alloc>::swap(this_type & rhs)
 
 template <class T, class Alloc>
 inline void
-ArrayVector<T, Alloc>::deallocate(pointer data, size_type size)
+ArrayVector<T, Alloc>::deallocate(pointer data, size_type size, size_type capacity)
 {
     if(data)
     {
-        detail::destroy_n(data, (int)size);
-        alloc_.deallocate(data, size);
+        detail::destroy_n(data, size);
+        alloc_.deallocate(data, capacity);
     }
 }
 
@@ -904,7 +955,7 @@ namespace std {
 template <class T>
 ostream & operator<<(ostream & s, vigra::ArrayVectorView<T> const & a)
 {
-    for(int k=0; k<(int)a.size()-1; ++k)
+    for(std::size_t k=0; k<a.size()-1; ++k)
         s << a[k] << ", ";
     if(a.size())
             s << a.back();

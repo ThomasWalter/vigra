@@ -1,6 +1,6 @@
 /************************************************************************/
 /*                                                                      */
-/*               Copyright 1998-2013 by Ullrich Koethe                  */
+/*                 Copyright 2011 by Ullrich Koethe                     */
 /*                                                                      */
 /*    This file is part of the VIGRA computer vision library.           */
 /*    The VIGRA Website is                                              */
@@ -33,13 +33,65 @@
 /*                                                                      */
 /************************************************************************/
 
+#define PY_ARRAY_UNIQUE_SYMBOL vigranumpyclustering_PyArray_API
+#define NO_IMPORT_ARRAY
 
-#ifndef VIGRA_CONFIG_VERSION_HXX
-#define VIGRA_CONFIG_VERSION_HXX
+#include <boost/python.hpp>
+#include <vigra/merge_graph/min_indexed_pq.hxx>
+namespace python = boost::python;
 
-    #define VIGRA_VERSION_MAJOR 1
-    #define VIGRA_VERSION_MINOR 9
-    #define VIGRA_VERSION_PATCH 1
-    #define VIGRA_VERSION "1.9.1"
+namespace vigra
+{
 
-#endif /* VIGRA_CONFIG_VERSION_HXX */
+
+
+template<class T>
+void defineMinIndexedPqT(const std::string name){
+    using namespace python;
+    docstring_options doc_options(true, true, false);
+
+    typedef MinIndexedPQ<T>  MinIndexedPQType;
+
+    class_<MinIndexedPQType>(name.c_str(),init<const size_t >())
+	    .def("insert",&MinIndexedPQType::insert,
+		    (
+		    	arg("index"),
+		    	arg("value")
+		    ),
+		    "insert a index with an value"
+    	)
+    	.def("changeValue",&MinIndexedPQType::changeValue,
+		    (
+		    	arg("index"),
+		    	arg("value")
+		    ),
+		    "insert a index with an value"
+    	)
+    	.def("decreaseValue",&MinIndexedPQType::decreaseValue,
+		    (
+		    	arg("index"),
+		    	arg("value")
+		    ),
+		    "insert a index with an value"
+    	)
+    	.def("increaseValue",&MinIndexedPQType::increaseValue,
+		    (
+		    	arg("index"),
+		    	arg("value")
+		    ),
+		    "insert a index with an value"
+    	)
+    	.def("__len__",&MinIndexedPQType::size,"number of elements in PQ")
+    	.def("isEmpty",&MinIndexedPQType::isEmpty,"check if pq is empty")
+
+    ;
+}
+
+
+void defineMinIndexedPq(){
+	defineMinIndexedPqT<float>("MinIndexedPQFloat");
+}
+
+
+} // namespace vigra
+

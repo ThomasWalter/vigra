@@ -479,10 +479,7 @@ namespace vigra
                                    const AlphaScaler& alpha_scaler)
         {
             typedef typename ImageIterator::row_iterator ImageRowIterator;
-            typedef typename ImageAccessor::value_type ImageValueType;
-
             typedef typename AlphaIterator::row_iterator AlphaRowIterator;
-            typedef typename AlphaAccessor::value_type AlphaValueType;
 
             typedef detail::RequiresExplicitCast<ValueType> explicit_cast;
 
@@ -792,7 +789,7 @@ namespace vigra
 
             encoder->setPixelType(pixel_type);
 
-            vigra_precondition(isBandNumberSupported(encoder->getFileType(), image_accessor.size(image_upper_left)),
+            vigra_precondition(isBandNumberSupported(encoder->getFileType(), image_accessor.size(image_upper_left) + 1U),
                                "exportImageAlpha(): file format does not support requested number of bands (color channels)");
 
             const range_t image_source_range(find_source_value_range(export_info,

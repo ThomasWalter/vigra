@@ -38,13 +38,11 @@
 #define VIGRA_MULTI_ITERATOR_HXX
 
 #include <sys/types.h>
+#include "multi_fwd.hxx"
 #include "iteratortags.hxx"
 #include "multi_iterator_coupled.hxx"
 
 namespace vigra {
-
-template<unsigned int N, class DirectedTag>
-class GridGraph;
 
 /** \addtogroup MultiIteratorGroup
 */
@@ -122,6 +120,19 @@ class MultiCoordinateIterator
     explicit MultiCoordinateIterator(GridGraph<N, DirectedTag> const & g) 
        : base_type(handle_type(g.shape()))
     {}
+
+
+    template<class DirectedTag>
+    explicit MultiCoordinateIterator(GridGraph<N, DirectedTag> const & g, const typename  GridGraph<N, DirectedTag>::Node & node) 
+       : base_type(handle_type(g.shape()))
+    {
+        if( isInside(g,node))
+            (*this)+=node;
+        else
+            *this=this->getEndIterator();
+    }
+
+
 
     // dereferencing the iterator yields the coordinate object
     // (used as vertex_descriptor)
@@ -256,18 +267,20 @@ class MultiCoordinateIterator
         <b>\#include</b> \<vigra/multi_iterator.hxx\><br/>
         Namespace: vigra
     */
-template <unsigned int N, class T, class REFERENCE, class POINTER>
+template <unsigned int N, class V, class REFERENCE, class POINTER>
 class StridedScanOrderIterator
-    : public CoupledIteratorType<N, T>::type
+    : public CoupledIteratorType<N, V>::type
 {
   public:
-    typedef typename CoupledIteratorType<N, T>::type  base_type;
+    typedef typename CoupledIteratorType<N, V>::type  base_type;
+    typedef typename base_type::value_type            handle_type;
 
     typedef typename base_type::shape_type         shape_type;
     typedef typename base_type::difference_type    difference_type;
-    typedef StridedScanOrderIterator              iterator;
+    typedef StridedScanOrderIterator               iterator;
     typedef std::random_access_iterator_tag        iterator_category;
 
+    typedef typename detail::ResolveChunkedMemory<V>::type T;
     typedef T                                      value_type;
     typedef REFERENCE                              reference;
     typedef T const &                              const_reference;
@@ -285,6 +298,10 @@ class StridedScanOrderIterator
 
     StridedScanOrderIterator(POINTER p, shape_type const & shape, shape_type const & strides) 
         : base_type(createCoupledIterator(MultiArrayView<N, T, StridedArrayTag>(shape, strides, const_cast<T *>(p))))
+    {}
+
+    StridedScanOrderIterator(handle_type const & handle) 
+        : base_type(handle)
     {}
 
     reference operator*()
@@ -315,6 +332,16 @@ class StridedScanOrderIterator
     const_reference operator[](MultiArrayIndex i) const
     {
         return *(StridedScanOrderIterator(*this) += i);
+    }
+
+    reference operator[](const shape_type& coordOffset)
+    {
+        return *(StridedScanOrderIterator(*this) += coordOffset);
+    }
+
+    const_reference operator[](const shape_type& coordOffset) const
+    {
+        return *(StridedScanOrderIterator(*this) += coordOffset);
     }
 
     StridedScanOrderIterator & operator++()
@@ -398,6 +425,13 @@ class StridedScanOrderIterator
     MultiArrayIndex index() const
     {
         return this->scanOrderIndex();
+    }
+
+    StridedScanOrderIterator & 
+    restrictToSubarray(shape_type const & start, shape_type const & stop)
+    {
+        base_type::restrictToSubarray(start, stop);
+        return *this;
     }
     
   protected:
@@ -708,12 +742,6 @@ struct MultiIteratorStrideTraits
         return s + d;
     }
 };
-
-template <unsigned int N, class T, class REFERENCE = T &, class POINTER = T *>
-class MultiIterator;
-
-template <unsigned int N, class T, class REFERENCE = T &, class POINTER = T *>
-class StridedMultiIterator;
 
 /********************************************************/
 /*                                                      */

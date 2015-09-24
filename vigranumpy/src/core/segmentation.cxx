@@ -49,6 +49,8 @@
 #include <vigra/convolution.hxx>
 #include <vigra/multi_convolution.hxx>
 #include <vigra/slic.hxx>
+#include <vigra/seg_to_seeds.hxx>
+
 
 #include <string>
 #include <cmath>
@@ -215,6 +217,81 @@ pythonLabelVolumeWithBackground(NumpyArray<3, Singleband<VoxelType> > volume,
 
 VIGRA_PYTHON_MULTITYPE_FUNCTOR(pyLabelVolumeWithBackground, pythonLabelVolumeWithBackground)
 
+template < class VoxelType, unsigned int ndim >
+NumpyAnyArray
+pythonLabelMultiArray(NumpyArray<ndim, Singleband<VoxelType> > volume,
+                      std::string neighborhood="",
+                      NumpyArray<ndim, Singleband<npy_uint32> > res = NumpyArray<ndim, Singleband<npy_uint32> >())
+{
+    neighborhood = tolower(neighborhood);
+    if (neighborhood == "")
+    {
+        neighborhood = "direct";
+    }
+
+    vigra_precondition(neighborhood == "direct" || neighborhood == "indirect",
+        "labelMultiArray(): neighborhood must be 'direct' or 'indirect'.");
+
+    std::string description("connected components with background, neighborhood=" + neighborhood);
+
+    res.reshapeIfEmpty(volume.taggedShape().setChannelDescription(description),
+        "labelMultiArray(): Output array has wrong shape.");
+
+    {
+        PyAllowThreads _pythread;
+        if (neighborhood == "direct")
+        {
+            labelMultiArray(volume, res, DirectNeighborhood);
+        }
+        else
+        {
+            labelMultiArray(volume, res, IndirectNeighborhood);
+        }
+    }
+    return res;
+}
+
+
+template < class VoxelType, unsigned int ndim >
+NumpyAnyArray
+pythonLabelMultiArrayWithBackground(NumpyArray<ndim, Singleband<VoxelType> > volume,
+                                std::string neighborhood="",
+                                VoxelType background_value = 0,
+                                NumpyArray<ndim, Singleband<npy_uint32> > res = NumpyArray<ndim, Singleband<npy_uint32> >())
+{
+    neighborhood = tolower(neighborhood);
+    if (neighborhood == "")
+    {
+        neighborhood = "direct";
+    }
+    vigra_precondition(neighborhood == "direct" || neighborhood == "indirect",
+        "labelMultiArrayWithBackground(): neighborhood must be 'direct' or 'indirect'.");
+
+    std::string description("connected components with background, neighborhood=");
+    description += neighborhood + ", bglabel=" + asString(background_value);
+
+    res.reshapeIfEmpty(volume.taggedShape().setChannelDescription(description),
+        "labelMultiArrayWithBackground(): Output array has wrong shape.");
+
+    {
+        PyAllowThreads _pythread;
+        if (neighborhood == "direct")
+        {
+            labelMultiArrayWithBackground(volume,
+                res, DirectNeighborhood,
+                background_value);
+        }
+        else
+        {
+            labelMultiArrayWithBackground(volume,
+                res, IndirectNeighborhood,
+                background_value);
+        }
+    }
+    return res;
+}
+
+
 /*********************************************************************************/
 
 // FIXME: support output of label images from localMinim/Maxima functions
@@ -224,6 +301,8 @@ NumpyAnyArray
 pythonLocalMinima2D(NumpyArray<2, Singleband<PixelType> > image,
                     PixelType marker = NumericTraits<PixelType>::one(),
                     int neighborhood = 8,
+                    bool allowAtBorder = false,
+                    bool allowPlateaus = false,
                     NumpyArray<2, Singleband<PixelType> > res = NumpyArray<2, Singleband<PixelType> >())
 {
     vigra_precondition(neighborhood == 4 || neighborhood == 8,
@@ -236,22 +315,13 @@ pythonLocalMinima2D(NumpyArray<2, Singleband<PixelType> > image,
             "localMinima(): Output array has wrong shape.");
 
     {
-            PyAllowThreads _pythread;
-        switch (neighborhood)
-        {
-            case 4:
-            {
-                localMinima(srcImageRange(image), destImage(res), marker,
-                    FourNeighborCode());
-                break;
-            }
-            case 8:
-            {
-                localMinima(srcImageRange(image), destImage(res), marker,
-                    EightNeighborCode());
-                break;
-            }
-        }
+        PyAllowThreads _pythread;
+        localMinima(image, res,
+            LocalMinmaxOptions()
+                .neighborhood(neighborhood)
+                .allowAtBorder(allowAtBorder)
+                .markWith(marker)
+                .allowPlateaus(allowPlateaus));
     }
     
     return res;
@@ -262,6 +332,8 @@ NumpyAnyArray
 pythonLocalMinima3D(NumpyArray<3, Singleband<PixelType> > volume,
                     PixelType marker = NumericTraits<PixelType>::one(), 
                     int neighborhood = 6, 
+                    bool allowAtBorder = false,
+                    bool allowPlateaus = false,
                     NumpyArray<3, Singleband<PixelType> > res = NumpyArray<3, Singleband<PixelType> >())
 {
     vigra_precondition(neighborhood == 6 || neighborhood == 26,
@@ -273,20 +345,14 @@ pythonLocalMinima3D(NumpyArray<3, Singleband<PixelType> > volume,
     res.reshapeIfEmpty(volume.taggedShape().setChannelDescription(description), 
             "localMinima(): Output array has wrong shape.");
             
-    switch (neighborhood)
     {
-        case 6:
-        {
-            localMinima3D(srcMultiArrayRange(volume), destMultiArray(res), marker,
-                    NeighborCode3DSix());
-            break;
-        }
-        case 26:
-        {
-            localMinima3D(srcMultiArrayRange(volume), destMultiArray(res), marker,
-                    NeighborCode3DTwentySix());
-            break;
-        }
+        PyAllowThreads _pythread;
+        localMinima(volume, res,
+            LocalMinmaxOptions()
+                .neighborhood(neighborhood)
+                .allowAtBorder(allowAtBorder)
+                .markWith(marker)
+                .allowPlateaus(allowPlateaus));
     }
 
     return res;
@@ -372,6 +438,8 @@ NumpyAnyArray
 pythonLocalMaxima2D(NumpyArray<2, Singleband<PixelType> > image,
                     PixelType marker = NumericTraits<PixelType>::one(),
                     int neighborhood = 8,
+                    bool allowAtBorder = false,
+                    bool allowPlateaus = false,
                     NumpyArray<2, Singleband<PixelType> > res = NumpyArray<2, Singleband<PixelType> >())
 {
     vigra_precondition(neighborhood == 4 || neighborhood == 8,
@@ -385,21 +453,12 @@ pythonLocalMaxima2D(NumpyArray<2, Singleband<PixelType> > image,
 
     {
         PyAllowThreads _pythread;
-        switch (neighborhood)
-        {
-            case 4:
-            {
-                localMaxima(srcImageRange(image), destImage(res), marker,
-                    FourNeighborCode());
-                break;
-            }
-            case 8:
-            {
-                localMaxima(srcImageRange(image), destImage(res), marker,
-                    EightNeighborCode());
-                break;
-            }
-        }
+        localMaxima(image, res,
+            LocalMinmaxOptions()
+                .neighborhood(neighborhood)
+                .allowAtBorder(allowAtBorder)
+                .markWith(marker)
+                .allowPlateaus(allowPlateaus));
     }
     
     return res;
@@ -410,6 +469,8 @@ NumpyAnyArray
 pythonLocalMaxima3D(NumpyArray<3, Singleband<PixelType> > volume,
                     PixelType marker = NumericTraits<PixelType>::one(), 
                     int neighborhood = 6, 
+                    bool allowAtBorder = false,
+                    bool allowPlateaus = false,
                     NumpyArray<3, Singleband<PixelType> > res = NumpyArray<3, Singleband<PixelType> >())
 {
     vigra_precondition(neighborhood == 6 || neighborhood == 26,
@@ -420,20 +481,15 @@ pythonLocalMaxima3D(NumpyArray<3, Singleband<PixelType> > volume,
     
     res.reshapeIfEmpty(volume.taggedShape().setChannelDescription(description), 
             "localMaxima(): Output array has wrong shape.");
-    switch (neighborhood)
+
     {
-        case 6:
-        {
-            localMaxima3D(srcMultiArrayRange(volume), destMultiArray(res), marker,
-                NeighborCode3DSix());
-            break;
-        }
-        case 26:
-        {
-            localMaxima3D(srcMultiArrayRange(volume), destMultiArray(res), marker,
-                NeighborCode3DTwentySix());
-            break;
-        }
+        PyAllowThreads _pythread;
+        localMaxima(volume, res,
+            LocalMinmaxOptions()
+                .neighborhood(neighborhood)
+                .allowAtBorder(allowAtBorder)
+                .markWith(marker)
+                .allowPlateaus(allowPlateaus));
     }
 
     return res;
@@ -956,7 +1012,6 @@ pythonSlic(NumpyArray<N, PixelType > array,
 {
     typedef typename detail::ResolveMultiband<PixelType>::type ValueType;
     typedef typename NormTraits<ValueType>::NormType TmpType;
-    typedef typename NumpyArray<N, ValueType >::view_type View;
     
     std::string description("Slic superpixels");
     
@@ -1010,11 +1065,45 @@ pythonSlic3D(NumpyArray<3, PixelType > image,
 
 VIGRA_PYTHON_MULTITYPE_FUNCTOR(pySlic3D, pythonSlic3D)
 
+
+template<unsigned int DIM>
+NumpyAnyArray  pythonShrinkLabels(
+    NumpyArray<DIM,npy_uint32> labels,
+    const size_t shrinkNpixels,
+    NumpyArray<DIM,Singleband<npy_uint32> > out = NumpyArray<DIM,Singleband<npy_uint32> >()
+){
+    out.reshapeIfEmpty(labels.shape());
+    shrinkLabels(labels,shrinkNpixels,out);
+    return out;
+}
+
+
+
+
 void defineSegmentation()
 {
     using namespace python;
     
     docstring_options doc_options(true, true, false);
+
+
+    python::def("segToSeeds", registerConverters(pythonShrinkLabels<2>),
+        (
+            python::arg("image"),
+            python::arg("shrinkN"),
+            python::arg("out")=python::object()
+        ),
+        "shrink / ungrow a labeling / segmentation"
+    );
+
+    python::def("segToSeeds", registerConverters(pythonShrinkLabels<3>),
+        (
+            python::arg("image"),
+            python::arg("shrinkN"),
+            python::arg("out")=python::object()
+        ),
+        "shrink / ungrow a labeling / segmentation"
+    );
 
     multidef("labelImage", pyLabelImage<npy_uint8, npy_uint32, float>(),
         (arg("image"), 
@@ -1055,7 +1144,118 @@ void defineSegmentation()
         "the pixel neighborhood to be used and can be 6 (default) or 26.\n"
         "\n"
         "For details see labelVolumeWithBackground_ in the vigra C++ documentation.\n");
-    
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<npy_uint8, 2>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()),
+        "Find the connected components of a segmented ND array."
+        "Parameter 'neighborhood' specifies the pixel neighborhood "
+        "to be used and can be 'direct' (default) or 'indirect'.\n"
+        "\n"
+        "For details see labelMultiArray_ in the vigra C++ documentation.\n");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<npy_uint8, 2>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<npy_uint8, 3>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<npy_uint8, 4>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<npy_uint8, 5>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<npy_uint32, 2>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<npy_uint32, 3>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<npy_uint32, 4>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<npy_uint32, 5>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<float, 2>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<float, 3>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<float, 4>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArray",
+        registerConverters(&pythonLabelMultiArray<float, 5>),
+        (arg("volume"), arg("neighborhood")="", arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<npy_uint8, 2>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()),
+        "Find the connected components of a segmented ND array, excluding the "
+        "background from labeling, where the background is the set of all pixels with "
+        "the given 'background_value'. Parameter 'neighborhood' specifies "
+        "the pixel neighborhood to be used and can be 'direct' (default) or 'indirect'.\n"
+        "\n"
+        "For details see labelMultiArrayWithBackground_ in the vigra C++ documentation.\n");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<npy_uint8, 3>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<npy_uint8, 4>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<npy_uint8, 5>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<npy_uint32, 2>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<npy_uint32, 3>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<npy_uint32, 4>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<npy_uint32, 5>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<float, 2>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<float, 3>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<float, 4>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
+    def("labelMultiArrayWithBackground",
+        registerConverters(&pythonLabelMultiArrayWithBackground<float, 5>),
+        (arg("volume"), arg("neighborhood")="", arg("background_value")=0, arg("out")=python::object()), "");
+
     /******************************************************************************/
     
     def("localMinima",
@@ -1063,20 +1263,32 @@ void defineSegmentation()
         (arg("image"), 
          arg("marker")=1.0, 
          arg("neighborhood") = 8,
+         arg("allowAtBorder") = false,
+         arg("allowPlateaus") = false,
          arg("out")=python::object()),
         "Find local minima in an image and mark them with the given 'marker'. Parameter "
         "'neighborhood' specifies the pixel neighborhood to be used and can be "
-        "4 or 8 (default).\n\n"
+        "4 or 8 (default). \n"
+        "If 'allowAtBorder' is true local minima at the image border will be detected.\n"
+        "If 'allowPlateaus' is true regions of constant gray value whose neighbors are all higher than the value of the region will be detected."
+        "\n\n"
         "For details see localMinima_ in the vigra C++ documentation.\n");
 
     def("localMinima3D",
-            registerConverters(&pythonLocalMinima3D<float> ),
-            (arg("volume"), arg("marker") = 1.0, arg("neighborhood") = 6, arg(
-                    "out") = python::object()),
-            "Find local minima in a volume and mark them with the given 'marker'. Parameter "
-                "'neighborhood' specifies the pixel neighborhood to be used and can be "
-                "6 or 26 (default).\n\n"
-                "For details see localMinima3D_ in the vigra C++ documentation.\n");
+        registerConverters(&pythonLocalMinima3D<float> ),
+        (arg("volume"),
+         arg("marker") = 1.0,
+         arg("neighborhood") = 6,
+         arg("allowAtBorder") = false,
+         arg("allowPlateaus") = false,
+         arg("out") = python::object()),
+        "Find local minima in a volume and mark them with the given 'marker'. Parameter "
+        "'neighborhood' specifies the pixel neighborhood to be used and can be "
+        "6 (default) or 26.\n"
+        "If 'allowAtBorder' is set to 'True' local minima at the volume border will be detected.\n"
+        "If 'allowPlateaus' is set to 'True' regions of constant gray value whose neighbors are all higher than the value of the region will be detected."
+        "\n\n"
+        "For details see localMinima_ in the vigra C++ documentation.\n");
 
     // def("extendedLocalMinima",
         // registerConverters(&pythonExtendedLocalMinima2D<float>),
@@ -1115,18 +1327,31 @@ void defineSegmentation()
         (arg("image"), 
          arg("marker")=1.0, 
          arg("neighborhood") = 8,
+         arg("allowAtBorder") = false,
+         arg("allowPlateaus") = false,
          arg("out")=python::object()),
         "Find local maxima in an image and mark them with the given 'marker'. Parameter "
         "'neighborhood' specifies the pixel neighborhood to be used and can be "
-        "4 or 8 (default).\n\n"
+        "4 or 8 (default).\n"
+        "If 'allowAtBorder' is set to 'True' local maxima at image border will be detected.\n"
+        "If 'allowPlateaus' is set to 'True' regions of constant gray value whose neighbors are all lower than the value of the region will be detected."
+        "\n\n"
         "For details see localMaxima_ in the vigra C++ documentation.\n");
 
     def("localMaxima3D", registerConverters(&pythonLocalMaxima3D<float> ), 
-         (arg("volume"), arg("marker") = 1.0, arg("neighborhood") = 6, arg("out") = python::object()),
-            "Find local maxima and maximal plateaus in a volume and mark them with "
-            "the given 'marker'. Parameter 'neighborhood' specifies the pixel "
-            "neighborhood to be used and can be 6(default) or 26 .\n\n"
-            "For details see localMaxima3D_ in the vigra C++ documentation.\n");
+        (arg("volume"),
+         arg("marker") = 1.0,
+         arg("neighborhood") = 6,
+         arg("allowAtBorder") = false,
+         arg("allowPlateaus") = false,
+         arg("out") = python::object()),
+        "Find local maxima and maximal plateaus in a volume and mark them with "
+        "the given 'marker'. Parameter 'neighborhood' specifies the pixel "
+        "neighborhood to be used and can be 6(default) or 26.\n"
+        "If 'allowAtBorder' is set to 'True' local maxima at the volume border will be detected.\n"
+        "If 'allowPlateaus' is set to 'True' regions of constant gray value whose neighbors are all lower than the value of the region will be detected."
+        "\n\n"
+        "For details see localMaxima_ in the vigra C++ documentation.\n");
 
     def("extendedLocalMaxima",
         registerConverters(&pythonExtendedLocalMaxima2D<float>),
@@ -1186,7 +1411,7 @@ void defineSegmentation()
         " method:\n"
         "    the algorithm to be used for watershed computation. Possible values:\n\n"
         "      'Turbo':\n"
-        "        (default if input dtype == uint8) use fastSeededRegionGrowing_ or tws() respectively\n"
+        "        (default if input dtype == uint8) use fastSeededRegionGrowing() (in 2D) or tws() (in 3D)\n"
         "      'RegionGrowing':\n"
         "        (default if input dtype != uint8) use seededRegionGrowing_ or seededRegionGrowing3D_ respectively\n"
         "      'UnionFind:\n"

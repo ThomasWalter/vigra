@@ -496,7 +496,7 @@ struct ClassifierTest
      */
     void RFresponseTest()
     {
-        int ii = 2; 
+        int ii = 2;
         // learn on glass data set and predict: 
         // this is interesting because there is no label with number 4
         // in this dataset.
@@ -576,6 +576,33 @@ struct ClassifierTest
         std::cerr << "done \n";
     }
 
+    /*
+     * Check weather the new implemented depth and size stop criterion compiles
+     * if the condition is not met the criterion will throw internally an error
+     */
+    void RFDepthAndSizeEarlyStopTest()
+    {
+        std::cerr << "RFDepthAndSizeEarlyStopTest(): Learning on Datasets\n";
+        int ii = 2;
+
+        vigra::RandomForest<>
+            RF(vigra::RandomForestOptions().tree_count(2));
+
+        int maxdepth=1;
+        DepthAndSizeStopping early_depth(maxdepth,10);
+
+        RF.learn( data.features(ii),
+                  data.labels(ii),
+                  rf_default(),
+                  rf_default(),
+                  early_depth,
+                  vigra::RandomMT19937(1));
+
+    }
+
+
+
+
 /** Learns The Refactored Random Forest with 100 trees 10 times and
  *  calulates the mean oob error. The distribution of the oob error
  *  is gaussian as a first approximation. The mean oob error should
@@ -586,7 +613,6 @@ struct ClassifierTest
     {
 
             std::cerr << "RFoobTest(): Learning each Datasets 10 times\n";
-            typedef MultiArrayShape<2>::type _TTT;
             for(int ii = 0; ii <data.size() ; ii++)
             {
                 double oob = 0.0;
@@ -702,12 +728,12 @@ struct ClassifierTest
 
     void RFvariableImportanceTest()
     {
-        double pina_var_imp[] = 
+        double pina_var_imp[] =
         {
-            0.017263, 0.040776, 0.003548, 0.003463, 0.005085, 0.015100, 0.005815, 0.019693, 
-            0.000555, 0.034199, 0.000093, 0.001263, 0.000669, 0.014896, 0.002777, 0.007323, 
-            0.017818, 0.074975, 0.003641, 0.004726, 0.005754, 0.029996, 0.008591, 0.027016, 
-            13.743281, 48.682308, 15.098506, 10.868249, 11.145719, 29.414823, 22.270783, 23.060834 
+            0.0177306,   0.0403224,  0.00387167, 0.0034106,  0.00471615,  0.0153205, 0.00530416, 0.019674,
+            0.000552956, 0.0335148, -8.2882e-05, 0.00100585, 0.000792797, 0.0143894, 0.00297142, 0.00743654,
+            0.0182836,   0.0738372, 0.00378879,  0.00441645, 0.00550894,  0.02971, 	 0.00827557, 0.0271106,
+            13.7433,     48.6823,   15.0985,     10.8682,    11.1457,     29.4148,   22.2708,    23.0608
         };
 
         vigra::MultiArrayView<2, double> p_imp(MultiArrayShape<2>::type(8, 4), pina_var_imp);
@@ -730,12 +756,10 @@ struct ClassifierTest
                             rf_default(),
                             vigra::RandomMT19937(1));
                 
-                var_imp.variable_importance_ -= p_imp;
                 for(int jj = 0; jj < p_imp.shape(0);  ++jj)
                     for(int gg = 0; gg < p_imp.shape(1); ++gg)
-                        shouldEqualTolerance(var_imp
-                                               .variable_importance_(jj, gg)
-                                             , 0.0,0.0001);
+                        shouldEqualTolerance(var_imp.variable_importance_(jj, gg)
+                                             , p_imp(jj,gg),0.01);
                 std::cerr << std::endl;
                 std::cerr << "[";
                 for(int ss = 0; ss < ii+1; ++ss)
@@ -801,6 +825,7 @@ struct ClassifierTest
                 std::string filename = data.names(ii) + "_rf.hdf5";
                 std::string filename_b = data.names(ii) + "_b_rf.hdf5";
                 std::remove(filename.c_str());
+                std::remove(filename_b.c_str());
                 vigra::RandomForest<> RF(vigra::RandomForestOptions()
                                              .tree_count(100));
 
@@ -827,6 +852,36 @@ struct ClassifierTest
                  rf_import_HDF5(RF5, filename_b);
                  should_all(RF, RF5);
 
+		  // test loading into an existing random forest object
+                 rf_import_HDF5(RF5, filename_b);
+                 should_all(RF, RF5);
+
+                hid_t fileId = H5Fopen(filename.c_str(),
+                        H5F_ACC_RDONLY, H5P_DEFAULT);
+
+                // reading from hid_t
+                rf_import_HDF5(RF5, fileId);
+                should_all(RF, RF5);
+
+                // reading from hid_t with group name
+                vigra::RandomForest<> RF6;
+                rf_import_HDF5(RF6, fileId, "/");
+                should_all(RF, RF6);
+
+                // writing to hid_t
+                hid_t fileId2 = H5Fopen(filename_b.c_str(),
+                        H5F_ACC_RDWR, H5P_DEFAULT);
+                rf_export_HDF5(RF, fileId2, "/t/");
+
+                // reading from the hid_t we wrote to
+                vigra::RandomForest<> RF7;
+                rf_import_HDF5(RF7, fileId2, "/t/");
+                should_all(RF, RF7);
+
+                // reading from hid_t with relative group name
+                rf_import_HDF5(RF6, fileId2, "t");
+                should_all(RF, RF6);
+
                  std::cerr << "[";
                  for(int ss = 0; ss < ii+1; ++ss)
                      std::cerr << "#";
@@ -836,6 +891,30 @@ struct ClassifierTest
                  std::cerr << "\n";
             }
             std::cerr << "done!\n";
+    }
+
+    void HDF5InvalidImportTest()
+    {
+        // at the very least, this should not crash (regression test)
+        HDF5DisableErrorOutput hdf5DisableErrorOutput;
+        RandomForest<> rf;
+        try {
+            bool emptyLoaded = rf_import_HDF5(rf, "data/empty.hdf5");
+            shouldNot(emptyLoaded);
+            failTest("rf_import_HDF5() didn't throw on 0-byte file.");
+        }
+		catch( std::runtime_error const & )
+        {
+        }
+
+        try {
+            bool bareHDF5Loaded = rf_import_HDF5(rf, "data/bare.hdf5");
+            shouldNot(bareHDF5Loaded);
+            failTest("rf_import_HDF5() didn't throw on empty, but valid HDF5 file.");
+        }
+		catch( PreconditionViolation const & )
+        {
+        }
     }
 #endif
 //};
@@ -990,11 +1069,13 @@ struct ClassifierTestSuite
         add( testCase( &ClassifierTest::RF_AlgorithmTest));
 #endif
         add( testCase( &ClassifierTest::RFresponseTest));
-        
+        add( testCase( &ClassifierTest::RFDepthAndSizeEarlyStopTest));
+
         add( testCase( &ClassifierTest::RFridgeRegressionTest));
         add( testCase( &ClassifierTest::RFSplitFunctorTest));
 #ifdef HasHDF5
         add( testCase( &ClassifierTest::HDF5ImpexTest));
+        add( testCase( &ClassifierTest::HDF5InvalidImportTest));
 #endif
          
     }

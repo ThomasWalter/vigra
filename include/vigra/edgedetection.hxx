@@ -626,19 +626,21 @@ void differenceOfExponentialCrackEdgeImage(
         }
     }
 
-    typename TMPIMG::Iterator ix = iy;
-    typename TMPIMG::Iterator tx = ty;
-    DestIterator              dx = dy;
-
-    for(x=0; x<w-1; ++x, ++ix.x, ++tx.x, dx.x+=2)
     {
-        TMPTYPE diff = *tx - *ix;
-        TMPTYPE gx = tx[right] - *tx;
+        typename TMPIMG::Iterator ix = iy;
+        typename TMPIMG::Iterator tx = ty;
+        DestIterator              dx = dy;
 
-        if((gx * gx > thresh) &&
-           (diff * (tx[right] - ix[right]) < zero))
+        for(x=0; x<w-1; ++x, ++ix.x, ++tx.x, dx.x+=2)
         {
-            da.set(edge_marker, dx, right);
+            TMPTYPE diff = *tx - *ix;
+            TMPTYPE gx = tx[right] - *tx;
+
+            if((gx * gx > thresh) &&
+               (diff * (tx[right] - ix[right]) < zero))
+            {
+                da.set(edge_marker, dx, right);
+            }
         }
     }
 
@@ -2236,6 +2238,9 @@ void cannyEdgeImageFromGradWithThinning(
            GradValue gradient_threshold,
            DestValue edge_marker, bool addBorder = true)
 {
+    vigra_precondition(gradient_threshold >= NumericTraits<GradValue>::zero(),
+         "cannyEdgeImageFromGradWithThinning(): gradient threshold must not be negative.");
+    
     int w = slr.x - sul.x;
     int h = slr.y - sul.y;
 
@@ -2312,7 +2317,7 @@ void cannyEdgeImageFromGradWithThinning(
             BImage::traverser eneu = eul + pneu;
             if(*eneu == 1) // point is boundary and not yet in the queue
             {
-                int v = detail::neighborhoodConfiguration(eneu);
+                v = detail::neighborhoodConfiguration(eneu);
                 if(isSimplePoint[v])
                 {
                     pqueue.push(SP(pneu, norm(sa(sul+pneu))));

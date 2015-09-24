@@ -36,6 +36,7 @@
 #include "vigra/unittest.hxx"
 #include "vigra/multi_array.hxx"
 #include "vigra/multi_iterator_coupled.hxx"
+#include "vigra/multi_hierarchical_iterator.hxx"
 #include "vigra/multi_impex.hxx"
 #include "vigra/basicimageview.hxx"
 #include "vigra/navigator.hxx"
@@ -64,6 +65,7 @@ public:
     typedef typename vigra::detail::ResolveMultiband<T>::type   scalar_type;
     typedef MultiArray <2, scalar_type> array2_type;
     typedef MultiArray <3, T> array3_type;
+    typedef MultiArrayView<3, Multiband<scalar_type> >  MultibandView3;
     typedef typename array3_type::view_type       array3_view_type;
     typedef typename array3_type::actual_stride   array3_stride;
     typedef typename array2_type::difference_type difference2_type;
@@ -85,6 +87,8 @@ public:
         should(array3.hasData());
         array3_type empty;
         should(!empty.hasData());
+        array3_type empty2(Shape3(2,1,0));
+        should(!empty2.hasData());
     }
 
     void testEquality ()
@@ -101,6 +105,10 @@ public:
         for(unsigned int k=0; k<10; ++k)
             array3(k,0,0) += 10;
         should(array3.subarray(Shape(0,0,0), Shape(10,1,1)) == array3.subarray(Shape(0,1,0), Shape(10,2,1)));
+
+        MultibandView3 channel_view(a.multiband());
+        shouldEqual(a.shape(), channel_view.shape());
+        shouldEqual(a.data(), channel_view.data());
     }
     
     // bindInner tests
@@ -219,7 +227,16 @@ public:
             shouldEqual(array3[k], k+100);
         for(int k=100; k<200; ++k)
             shouldEqual(array3[k], k-100);
-
+            
+        MultiArrayView <3, scalar_type> varray1 = array;
+        MultiArrayView <3, scalar_type> varray2 = array3.subarray (Shape(0,1,0), Shape(3,4,5));
+        shouldEqual (varray1.shape(), Shape(4,4,4));
+        shouldEqual (varray2.shape(), Shape(3,3,5));
+        varray2.swap(varray1);
+        shouldEqual (varray2.shape(), Shape(4,4,4));
+        shouldEqual (varray1.shape(), Shape(3,3,5));
+        shouldEqual (varray2.data(), array.data());
+        shouldEqual (varray1.data(), &array3(0,1,0));
     }
         
     // stridearray tests
@@ -262,7 +279,6 @@ public:
     void testIsStrided()
     {
         // for MultiArray<3, Multiband<T> >
-        typedef difference3_type Shape;
 
         should(!array3.isUnstrided());
         should(array3.permuteStridesAscending().isUnstrided());
@@ -442,7 +458,10 @@ public:
             std::string message(c.what());
             should(0 == expected.compare(message.substr(0,expected.size())));
         }
+	array.reset();
+	array = array3.subarray(Shape(0,0,0), Shape(10,1,1)); // possible after reset.
         MultiArrayView <3, scalar_type, array3_stride> subarray = array3.subarray(Shape(0,0,0), Shape(10,1,1));
+	should(subarray == array);
         subarray = array3.subarray(Shape(0,1,0), Shape(10,2,1)); // should overwrite the data
         for(unsigned int k=0; k<10; ++k)
             shouldEqual(array3(k,0,0), array3(k,1,0));
@@ -551,6 +570,11 @@ public:
         shouldEqual(a(0), 2);
         shouldEqual(a(1), 2);
         should(a == array1_t(shape1_t(2), 4).init(2));
+
+        array1_t b(Shape1(5), LinearSequence);
+        shouldEqual (b.shape (0), 5);
+        int ref[] = { 0, 1, 2, 3, 4 };
+        shouldEqualSequence(b.begin(), b.end(), ref);
     }
 
     void test_assignment ()
@@ -624,6 +648,14 @@ public:
         shouldEqual(&i1[7], &a3(1,0,1));
         shouldEqual(&i1[9], &a3(1,1,1));
 
+        shouldEqual(&i1[Shape3(0,0,0)], &a3(0,0,0));
+        shouldEqual(&i1[Shape3(1,0,0)], &a3(1,0,0));
+        shouldEqual(&i1[Shape3(0,1,0)], &a3(0,1,0));
+        shouldEqual(&i1[Shape3(1,1,0)], &a3(1,1,0));
+        shouldEqual(&i1[Shape3(0,0,1)], &a3(0,0,1));
+        shouldEqual(&i1[Shape3(1,0,1)], &a3(1,0,1));
+        shouldEqual(&i1[Shape3(1,1,1)], &a3(1,1,1));
+
         shouldEqual(&*(i1+0), &a3(0,0,0));
         shouldEqual(&*(i1+1), &a3(1,0,0));
         shouldEqual(&*(i1+2), &a3(0,1,0));
@@ -684,6 +716,14 @@ public:
         shouldEqual(&*(i3-shape3_t(1,0,1)), &a3(0,2,3));
         shouldEqual(&*(i3-shape3_t(1,1,1)), &a3(0,1,3));
 
+        shouldEqual(&i3[-shape3_t(0,0,0)], &a3(1,2,4));
+        shouldEqual(&i3[-shape3_t(1,0,0)], &a3(0,2,4));
+        shouldEqual(&i3[-shape3_t(0,1,0)], &a3(1,1,4));
+        shouldEqual(&i3[-shape3_t(1,1,0)], &a3(0,1,4));
+        shouldEqual(&i3[-shape3_t(0,0,1)], &a3(1,2,3));
+        shouldEqual(&i3[-shape3_t(1,0,1)], &a3(0,2,3));
+        shouldEqual(&i3[-shape3_t(1,1,1)], &a3(0,1,3));
+        
         shouldEqual(&iend[-1], &a3(1,2,4));
         shouldEqual(&iend[-2], &a3(0,2,4));
         shouldEqual(&iend[-3], &a3(1,1,4));
@@ -702,23 +742,47 @@ public:
 
         unsigned int count = 0;
         shape3_t p;
+        i3 = av.begin();
+        iterator3_t i4(av.begin()); 
+        iterator3_t i5(av.begin()); 
+        iterator3_t i6(av.begin()); 
 
         // iterate over the third dimension
-        for (p[2]=0; p[2] != s[2]; ++p[2]) 
+        for (p[2]=0, i3.resetDim(2), i4.setDim(2, 0), i5.dim<2>() = 0, i6.resetDim(2); 
+                i3.point(2) != s[2]; 
+                i3.incDim(2), i4.addDim(2, 1), ++i5.dim<2>(), i6.dim<2>() += 1, ++p[2]) 
         {
-            for (p[1]=0; p[1] != s[1]; ++p[1]) 
+            for (p[1]=0, i3.resetDim(1), i4.setDim(1, 0), i5.dim<1>() = 0, i6.resetDim(1); 
+                    i3.point(1) != s[1]; 
+                    i3.incDim(1), i4.addDim(1, 1), ++i5.dim<1>(), i6.dim<1>() += 1, ++p[1]) 
             {
-                for (p[0]=0; p[0] != s[0]; ++p[0], ++i1, ++c, i2 += 1, ++count)
+                for (p[0]=0, i3.resetDim(0), i4.setDim(0, 0), i5.dim<0>() = 0, i6.resetDim(0); 
+                        i3.point(0) != s[0]; 
+                        i3.incDim(0), i4.addDim(0, 1), ++i5.dim<0>(), i6.dim<0>() += 1, ++p[0], ++i1, ++c, i2 += 1, ++count)
                 {
                     shouldEqual(&*i1, &a3[p]);
                     shouldEqual(&*i2, &a3[p]);
+                    shouldEqual(&*i3, &a3[p]);
+                    shouldEqual(&*i4, &a3[p]);
+                    shouldEqual(&*i5, &a3[p]);
+                    shouldEqual(&*i6, &a3[p]);
                     shouldEqual(i1.operator->(), &a3[p]);
                     shouldEqual(i2.operator->(), &a3[p]);
                     shouldEqual(*c, p);
+
                     shouldEqual(i1.point(), p);
                     shouldEqual(i2.point(), p);
+                    shouldEqual(i3.point(), p);
+                    shouldEqual(i4.point(), p);
+                    shouldEqual(i5.point(), p);
+                    shouldEqual(i6.point(), p);
+
                     shouldEqual(i1.index(), count);
                     shouldEqual(i2.index(), count);
+                    shouldEqual(i3.index(), count);
+                    shouldEqual(i4.index(), count);
+                    shouldEqual(i5.index(), count);
+                    shouldEqual(i6.index(), count);
 
                     should(i1 != iend);
                     should(!(i1 == iend));
@@ -726,6 +790,25 @@ public:
                     should(i1 <= iend);
                     should(!(i1 > iend));
                     should(!(i1 >= iend));
+
+                    should(i5.dim<2>() == p[2]);
+                    should(i5.dim<1>() == p[1]);
+                    should(i5.dim<0>() == p[0]);
+                    should(i5.dim<2>() != s[2]);
+                    should(i5.dim<1>() != s[1]);
+                    should(i5.dim<0>() != s[0]);
+                    should(i5.dim<2>() <= p[2]);
+                    should(i5.dim<1>() <= p[1]);
+                    should(i5.dim<0>() <= p[0]);
+                    should(i5.dim<2>() < s[2]);
+                    should(i5.dim<1>() < s[1]);
+                    should(i5.dim<0>() < s[0]);
+                    should(i5.dim<2>() >= 0);
+                    should(i5.dim<1>() >= 0);
+                    should(i5.dim<0>() >= 0);
+                    shouldNot(i5.dim<2>() > s[2]);
+                    shouldNot(i5.dim<1>() > s[1]);
+                    shouldNot(i5.dim<0>() > s[0]);
 
                     shouldEqual(iend - i1, av.size() - count);
 
@@ -912,12 +995,22 @@ public:
         shouldEqual(&get<1>(*(i1+shape3_t(1,0,1))), &a3(1,0,1));
         shouldEqual(&get<1>(*(i1+shape3_t(1,1,1))), &a3(1,1,1));
 
+        shouldEqual(&get<1>(i1[shape3_t(0,0,0)]), &a3(0,0,0));
+        shouldEqual(&get<1>(i1[shape3_t(1,0,0)]), &a3(1,0,0));
+        shouldEqual(&get<1>(i1[shape3_t(0,1,0)]), &a3(0,1,0));
+        shouldEqual(&get<1>(i1[shape3_t(1,1,0)]), &a3(1,1,0));
+        shouldEqual(&get<1>(i1[shape3_t(0,0,1)]), &a3(0,0,1));
+        shouldEqual(&get<1>(i1[shape3_t(1,0,1)]), &a3(1,0,1));
+        shouldEqual(&get<1>(i1[shape3_t(1,1,1)]), &a3(1,1,1));
+
         shouldEqual(&get<1>(*(iend-1)), &a3(1,2,4));
         shouldEqual(&get<1>(*(iend-2)), &a3(0,2,4));
         shouldEqual(&get<1>(*(iend-3)), &a3(1,1,4));
         shouldEqual(&get<1>(*(iend-7)), &a3(1,2,3));
         shouldEqual(&get<1>(*(iend-8)), &a3(0,2,3));
         shouldEqual(&get<1>(*(iend-10)), &a3(0,1,3));
+
+        should(cast<1>(*i1).arrayView() == a3);
 
         i3 = iend-1;
         shouldEqual(&get<1>(*(i3-shape3_t(0,0,0))), &a3(1,2,4));
@@ -956,6 +1049,8 @@ public:
                 {
                     shouldEqual(&get<1>(*i1), &a3[p]);
                     shouldEqual(&get<1>(*i2), &a3[p]);
+                    shouldEqual(&get<1>(i1), &a3[p]);
+                    shouldEqual(&get<1>(i2), &a3[p]);
                     shouldEqual(&i1.get<1>(), &a3[p]);
                     shouldEqual(&i2.get<1>(), &a3[p]);
                     //shouldEqual(i1.operator->(), &a3[p]);
@@ -964,8 +1059,12 @@ public:
                     shouldEqual(i2.point(), p);
                     shouldEqual(i1.get<0>(), p);
                     shouldEqual(i2.get<0>(), p);
+                    shouldEqual(get<0>(i1), p);
+                    shouldEqual(get<0>(i2), p);
                     shouldEqual(i1.scanOrderIndex(), count);
                     shouldEqual(i2.scanOrderIndex(), count);
+
+                    should(cast<1>(*i1).arrayView() == a3);
 
                     should(i1 != iend);
                     should(!(i1 == iend));
@@ -1026,16 +1125,21 @@ public:
         Iterator0 i0 = createCoupledIterator(Shape1(4));
         Iterator1 it = createCoupledIterator(vi, vd),
                   end = it.getEndIterator();
+        Iterator1 iz = zip(vi.begin(), vd.begin());
 
         count = 0;
-        for(; it < end; ++it, ++i0, ++count)
+        for(; count < 4; ++iz, ++it, ++i0, ++count)
         {
             shouldEqual(i0.get<0>(), Shape1(count));
             shouldEqual(it.get<0>(), Shape1(count));
             shouldEqual(it.get<1>(), count+10);
             shouldEqual(it.get<2>(), count+20.0);
+            shouldEqual(iz.get<0>(), Shape1(count));
+            shouldEqual(iz.get<1>(), count+10);
+            shouldEqual(iz.get<2>(), count+20.0);
         }
-        shouldEqual(count, 4);
+        shouldEqual(it, end);
+        shouldEqual(iz, end);
 
         // test multiband
         MultiArrayView<3, scalar_type, StridedArrayTag> at = a3.transpose();
@@ -1050,6 +1154,7 @@ public:
             shouldEqual(im.get<1>().shape(), Shape1(2));
             shouldEqual(&(im.get<1>()[0]), &(im.get<2>()));
             shouldEqual(&(im.get<1>()[1]), &(im.get<3>()));
+            should(cast<1>(*im).arrayView() == at);
         }
         shouldEqual(count, 15);
     }
@@ -1180,6 +1285,81 @@ public:
         shouldEqual(&*(i3+shape3_t(2,3,4)), &i3[shape3_t(2,3,4)]);
     }
 
+    void test_hierarchical ()
+    {
+        // test hierarchical navigation and 
+        auto i3_f = createHierarchicalIterator(a3),
+             i3_l = i3_f.getEndIterator();
+        auto i3_c = zip(i3_f, i3_f);
+        array3_t::iterator seqi = a3.begin();
+
+        int countx = 0, county = 0, countz = 0;
+
+        // iterate over the third dimension
+        for (int z=0; i3_f != i3_l; ++i3_f, ++i3_c, ++z) 
+        {
+            auto i2_f = i3_f.begin ();
+            auto i2_c = i3_c.begin ();
+            auto i2_l = i3_f.end ();
+            // iterate over the second dimension
+            for (int y=0; i2_f != i2_l; ++i2_f, ++i2_c, ++y) 
+            {
+                auto i1_f = i2_f.begin ();
+                auto i1_c = i2_c.begin ();
+                auto i1_l = i2_f.end ();
+                // iterate over the first dimension
+                for (int x=0; i1_f != i1_l; ++i1_f, ++i1_c, ++x, ++seqi)
+                {
+                    ++countx;
+                    shouldEqual(&*seqi, &a3(x,y,z));
+                    shouldEqual(i1_f.point(), Shape3(x,y,z));
+                    shouldEqual(&*i1_f, &a3(x,y,z));
+                    shouldEqual(i1_c->get<0>(), Shape3(x,y,z));
+                    shouldEqual(&i1_c->get<1>(), &a3(x,y,z));
+                    shouldEqual(&i1_c->get<2>(), &a3(x,y,z));
+                    shouldEqual(&get<1>(*i1_c), &a3(x,y,z));
+                    shouldEqual(&get<2>(*i1_c), &a3(x,y,z));
+                }
+                ++county;
+            }
+            ++countz;
+        }
+
+        shouldEqual (countx, 30);
+        shouldEqual (county, 15);
+        shouldEqual (countz, 5);
+        shouldEqual (seqi, a3.end());
+        //
+        //// test direct navigation
+        //traverser3_t i3 = a3.traverser_begin();
+        //shouldEqual(&*i3, &a3[shape3_t(0,0,0)]);
+
+        //i3.dim<2>()++;
+        //i3.dim<1>()++;
+        //i3.dim<0>()++;        
+        //shouldEqual(&*i3, &a3[shape3_t(1,1,1)]);
+
+        //i3.dim<2>()+= 3;
+        //i3.dim<1>()+= 2;
+        //i3.dim<0>()+= 1;        
+        //shouldEqual(&*i3, &a3[shape3_t(2,3,4)]);
+        //shouldEqual(&i3[shape3_t(-2,-3,-4)], &a3[shape3_t(0,0,0)]);
+        //shouldEqual(&*(i3-shape3_t(2,3,4)), &a3[shape3_t(0,0,0)]);
+
+        //i3.dim<2>()--;
+        //i3.dim<1>()--;
+        //i3.dim<0>()--;        
+        //shouldEqual(&*i3, &a3[shape3_t(1,2,3)]);
+
+        //i3.dim<2>()-= 3;
+        //i3.dim<1>()-= 2;
+        //i3.dim<0>()-= 1;        
+        //shouldEqual(&*i3, &a3[shape3_t(0,0,0)]);
+
+        //shouldEqual(&i3[shape3_t(2,3,4)], &a3[shape3_t(2,3,4)]);
+        //shouldEqual(&*(i3+shape3_t(2,3,4)), &i3[shape3_t(2,3,4)]);
+    }
+
     void test_bindOuter ()
     {
         MultiArrayView <2, unsigned char> ba = a3.bindOuter(TinyVector<int, 1>(2));
@@ -1268,9 +1448,9 @@ public:
         
         strided_array_t st = a3.stridearray (shape3_t(3,4,6));
 
-        shouldEqual (st.shape (0), 6);
-        shouldEqual (st.shape (1), 7);
-        shouldEqual (st.shape (2), 8);
+        shouldEqual (st.shape (0), 7);
+        shouldEqual (st.shape (1), 8);
+        shouldEqual (st.shape (2), 9);
         
         // test hierarchical navigation
         typedef strided_array_t::traverser Traverser3;
@@ -1297,9 +1477,9 @@ public:
             ++countz;
         }
 
-        shouldEqual (countx, 336u);
-        shouldEqual (county, 56u);
-        shouldEqual (countz, 8u);
+        shouldEqual (countx, 504u);
+        shouldEqual (county, 72u);
+        shouldEqual (countz, 9u);
   
         // test direct navigation
         strided_array_t::traverser i = st.traverser_begin();        
@@ -1515,7 +1695,7 @@ struct MultiImpexTest
         shouldEqual(result(0,1,2), 3);
         shouldEqual(result(0,1,3), 4);
 
-#ifdef _WIN32
+#ifdef _MSC_VER
         exportVolume(array, VolumeExportInfo("impex\\test", ext2));
         
         importVolume(result, std::string("impex\\test"), std::string(ext2));
@@ -1525,7 +1705,7 @@ struct MultiImpexTest
         shouldEqual(result(0,1,1), 2);
         shouldEqual(result(0,1,2), 3);
         shouldEqual(result(0,1,3), 4);
-#endif // _WIN32
+#endif // _MSC_VER
     }
 
 #if defined(HasTIFF)
@@ -2190,6 +2370,15 @@ struct MultiArrayPointoperatorsTest
         initMultiArrayBorder(vol2, 9, 0);
         shouldEqualSequence(vol2.begin(), vol2.end(), desired_vol2);
 
+        const int desired_asym_img[] ={  0, 0, 0, 0, 0, 0,
+                                         0, 0, 5, 5, 5, 0,
+                                         0, 0, 5, 5, 5, 0,
+                                         0, 0, 5, 5, 5, 0,
+                                         0, 0, 0, 0, 0, 0,
+                                         0, 0, 0, 0, 0, 0};
+        img = 5;
+        initMultiArrayBorder(img, Shape2(2,1), Shape2(1,2), 0);
+        shouldEqualSequence(img.begin(), img.end(), desired_asym_img);
     }
 
     void testInspect()
@@ -2337,14 +2526,14 @@ public:
         t = TOCS;
         std::cerr << "    marray expression: " << t << "\n";
 #endif
-        TIC;
-        typedef array3_type::view_type View;
-        View::iterator wi = ((View &)w).begin(), wend = wi.getEndIterator(),
-                       ui = ((View &)u).begin(), vi = ((View &)v).begin();
-        for(; wi != wend; ++wi, ++ui, ++vi)
-                    *wi = *ui * *vi;
-        t = TOCS;
-        std::cerr << "    StridedScanOrderIterator: " << t << "\n";
+        //TIC;
+        //typedef array3_type::view_type View;
+        //View::iterator wi = ((View &)w).begin(), wend = wi.getEndIterator(),
+        //               ui = ((View &)u).begin(), vi = ((View &)v).begin();
+        //for(; wi != wend; ++wi, ++ui, ++vi)
+        //            *wi = *ui * *vi;
+        //t = TOCS;
+        //std::cerr << "    StridedScanOrderIterator: " << t << "\n";
         TIC;
         typedef CoupledIteratorType<3, scalar_type, scalar_type, scalar_type>::type CI;
         CI i = createCoupledIterator(w, u, v), end = i.getEndIterator();
@@ -2352,31 +2541,47 @@ public:
                     i.get<1>() = i.get<2>() * i.get<3>();
         t = TOCS;
         std::cerr << "    CoupledScanOrderIterator: " << t << "\n";
+        //TIC;
+        //w = u*v;
+        //t = TOCS;
+        //std::cerr << "    multi_math expression: " << t << "\n";
+        //TIC;
+        //w.transpose() = u.transpose()*v.transpose();
+        //t = TOCS;
+        //std::cerr << "    transposed multi_math expression: " << t << "\n";
+        //TIC;
+        //combineTwoMultiArrays(srcMultiArrayRange(u), srcMultiArray(v), destMultiArray(w),
+        //                      Arg1()*Arg2());
+        //t = TOCS;
+        //std::cerr << "    lambda expression: " << t << "\n";
+        //TIC;
+        //combineTwoMultiArrays(srcMultiArrayRange(u.transpose()), srcMultiArray(v.transpose()), destMultiArray(w),
+        //                      Arg1()*Arg2());
+        //t = TOCS;
+        //std::cerr << "    transposed lambda expression: " << t << "\n";
+        //TIC;
+        //for(int z=0; z<size; ++z)
+        //    for(int y=0; y<size; ++y)
+        //        for(int x=0; x<size; ++x)
+        //            w(x,y,z) = u(x,y,z) * v(x,y,z);
+        //t = TOCS;
+        //std::cerr << "    explicit loops: " << t << "\n";
+        i = createCoupledIterator(w, u, v);
         TIC;
-        w = u*v;
+        for(i.dim<2>() = 0; i.dim<2>() <size; ++i.dim<2>())
+            for(i.dim<1>() = 0; i.dim<1>()<size; ++i.dim<1>())
+                for(i.dim<0>() = 0; i.dim<0>()<size; ++i.dim<0>())
+                    i.get<1>() = i.get<2>() * i.get<3>();
         t = TOCS;
-        std::cerr << "    multi_math expression: " << t << "\n";
+        std::cerr << "    coupled iterator explicit template loops: " << t << "\n";
+        i = createCoupledIterator(w, u, v);
         TIC;
-        w.transpose() = u.transpose()*v.transpose();
+        for(i.resetDim(2); i.coord(2) < size; i.incDim(2))
+            for(i.resetDim(1); i.coord(1) < size; i.incDim(1))
+                for(i.resetDim(0); i.coord(0) < size; i.incDim(0))
+                    i.get<1>() = i.get<2>() * i.get<3>();
         t = TOCS;
-        std::cerr << "    transposed multi_math expression: " << t << "\n";
-        TIC;
-        combineTwoMultiArrays(srcMultiArrayRange(u), srcMultiArray(v), destMultiArray(w),
-                              Arg1()*Arg2());
-        t = TOCS;
-        std::cerr << "    lambda expression: " << t << "\n";
-        TIC;
-        combineTwoMultiArrays(srcMultiArrayRange(u.transpose()), srcMultiArray(v.transpose()), destMultiArray(w),
-                              Arg1()*Arg2());
-        t = TOCS;
-        std::cerr << "    transposed lambda expression: " << t << "\n";
-        TIC;
-        for(int z=0; z<size; ++z)
-            for(int y=0; y<size; ++y)
-                for(int x=0; x<size; ++x)
-                    w(x,y,z) = u(x,y,z) * v(x,y,z);
-        t = TOCS;
-        std::cerr << "    explicit loops: " << t << "\n";
+        std::cerr << "    coupled iterator explicit runtime loops: " << t << "\n";
     }
 
     void testBasicArithmetic()
@@ -2860,6 +3065,7 @@ struct MultiArrayTestSuite
         add( testCase( &MultiArrayTest::test_coupled_iterator ) );
         add( testCase( &MultiArrayTest::test_traverser ) );
         add( testCase( &MultiArrayTest::test_const_traverser ) );
+        add( testCase( &MultiArrayTest::test_hierarchical ) );
         add( testCase( &MultiArrayTest::test_bindOuter ) );
         add( testCase( &MultiArrayTest::test_bindInner ) );
         add( testCase( &MultiArrayTest::test_bindInnerAll ) );
@@ -2906,7 +3112,6 @@ struct MultiArrayDataTestSuite
         }
         {
             typedef Multiband<int> T;
-            typedef MultiArray<3, T> A;
             add( testCase( &MultiArrayDataTest<T>::testHasData ) );
             add( testCase( &MultiArrayDataTest<T>::testEquality ) );
             add( testCase( &MultiArrayDataTest<T>::test_subarray ) );

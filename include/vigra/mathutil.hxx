@@ -159,6 +159,27 @@ VIGRA_DEFINE_MISSING_ABS(signed long long)
 
 #undef VIGRA_DEFINE_MISSING_ABS
 
+#ifndef _MSC_VER
+
+using std::isinf;
+using std::isnan;
+
+#else
+
+template <class REAL>
+inline bool isinf(REAL v)
+{
+    return _finite(v) == 0;
+}
+
+template <class REAL>
+inline bool isnan(REAL v)
+{
+    return _isnan(v) != 0;
+}
+
+#endif
+
 // scalar dot is needed for generic functions that should work with
 // scalars and vectors alike
 
@@ -372,7 +393,7 @@ struct power_static
 template <class V>
 struct power_static<V, 0>
 {
-    static V call(const V & x)
+    static V call(const V & /* x */)
     {
         return V(1);
     }
@@ -707,7 +728,7 @@ void symmetric2x2Eigenvalues(T a00, T a01, T a11, T * r0, T * r1)
         This uses a numerically stable version of the analytical eigenvalue formula according to
         <p>
         David Eberly: <a href="http://www.geometrictools.com/Documentation/EigenSymmetric3x3.pdf">
-        <em>"Eigensystems for 3 × 3 Symmetric Matrices (Revisited)"</em></a>, Geometric Tools Documentation, 2006
+        <em>"Eigensystems for 3 Ã— 3 Symmetric Matrices (Revisited)"</em></a>, Geometric Tools Documentation, 2006
         
         <b>\#include</b> \<vigra/mathutil.hxx\><br>
         Namespace: vigra
@@ -846,7 +867,7 @@ inline double ellipticIntegralE(double x, double k)
     return s*(detail::ellipticRF(c2, 1.0-k, 1.0) - k/3.0*detail::ellipticRD(c2, 1.0-k, 1.0));
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && _MSC_VER < 1800
 
 namespace detail {
 
@@ -1585,7 +1606,7 @@ FPT safeFloatDivision( FPT f1, FPT f2 )
 
 } // namespace detail
     
-    /** \brief Tolerance based floating-point comparison.
+    /** \brief Tolerance based floating-point equality.
 
         Check whether two floating point numbers are equal within the given tolerance.
         This is useful because floating point numbers that should be equal in theory are
@@ -1617,8 +1638,112 @@ inline bool closeAtTolerance(T1 l, T2 r)
     typedef typename PromoteTraits<T1, T2>::Promote T;
     return closeAtTolerance(l, r, T(2.0) * NumericTraits<T>::epsilon());
 }
+    
+    /** \brief Tolerance based floating-point less-or-equal.
+
+        Check whether two floating point numbers are less or equal within the given tolerance.
+        That is, \a l can actually be greater than \a r within the given \a epsilon.
+        This is useful because floating point numbers that should be equal in theory are
+        rarely exactly equal in practice. If the tolerance \a epsilon is not given,
+        twice the machine epsilon is used.
+
+        <b>\#include</b> \<vigra/mathutil.hxx\><br>
+        Namespace: vigra
+    */
+template <class T1, class T2>
+inline bool 
+lessEqualAtTolerance(T1 l, T2 r, typename PromoteTraits<T1, T2>::Promote epsilon)
+{
+    return l < r || closeAtTolerance(l, r, epsilon);
+}
+
+template <class T1, class T2>
+inline bool lessEqualAtTolerance(T1 l, T2 r)
+{
+    typedef typename PromoteTraits<T1, T2>::Promote T;
+    return lessEqualAtTolerance(l, r, T(2.0) * NumericTraits<T>::epsilon());
+}
+    
+    /** \brief Tolerance based floating-point greater-or-equal.
+
+        Check whether two floating point numbers are greater or equal within the given tolerance.
+        That is, \a l can actually be less than \a r within the given \a epsilon.
+        This is useful because floating point numbers that should be equal in theory are
+        rarely exactly equal in practice. If the tolerance \a epsilon is not given,
+        twice the machine epsilon is used.
+
+        <b>\#include</b> \<vigra/mathutil.hxx\><br>
+        Namespace: vigra
+    */
+template <class T1, class T2>
+inline bool 
+greaterEqualAtTolerance(T1 l, T2 r, typename PromoteTraits<T1, T2>::Promote epsilon)
+{
+    return r < l || closeAtTolerance(l, r, epsilon);
+}
+
+template <class T1, class T2>
+inline bool greaterEqualAtTolerance(T1 l, T2 r)
+{
+    typedef typename PromoteTraits<T1, T2>::Promote T;
+    return greaterEqualAtTolerance(l, r, T(2.0) * NumericTraits<T>::epsilon());
+}
 
 //@}
+
+#define VIGRA_MATH_FUNC_HELPER(TYPE) \
+    inline TYPE clipLower(const TYPE t){ \
+        return t < static_cast<TYPE>(0.0) ? static_cast<TYPE>(0.0) : t; \
+    } \
+    inline TYPE clipLower(const TYPE t,const TYPE valLow){ \
+        return t < static_cast<TYPE>(valLow) ? static_cast<TYPE>(valLow) : t; \
+    } \
+    inline TYPE clipUpper(const TYPE t,const TYPE valHigh){ \
+        return t > static_cast<TYPE>(valHigh) ? static_cast<TYPE>(valHigh) : t; \
+    } \
+    inline TYPE clip(const TYPE t,const TYPE valLow, const TYPE valHigh){ \
+        if(t<valLow) \
+            return valLow; \
+        else if(t>valHigh) \
+            return valHigh; \
+        else  \
+            return t; \
+    } \
+    inline TYPE sum(const TYPE t){ \
+        return t; \
+    }\
+    inline NumericTraits<TYPE>::RealPromote mean(const TYPE t){ \
+        return t; \
+    }\
+    inline TYPE isZero(const TYPE t){ \
+        return t==static_cast<TYPE>(0); \
+    } \
+    inline NumericTraits<TYPE>::RealPromote sizeDividedSquaredNorm(const TYPE t){ \
+        return  squaredNorm(t); \
+    } \
+    inline NumericTraits<TYPE>::RealPromote sizeDividedNorm(const TYPE t){ \
+        return  norm(t); \
+    } 
+
+
+VIGRA_MATH_FUNC_HELPER(unsigned char)
+VIGRA_MATH_FUNC_HELPER(unsigned short)
+VIGRA_MATH_FUNC_HELPER(unsigned int)
+VIGRA_MATH_FUNC_HELPER(unsigned long)
+VIGRA_MATH_FUNC_HELPER(unsigned long long)
+VIGRA_MATH_FUNC_HELPER(signed char)
+VIGRA_MATH_FUNC_HELPER(signed short)
+VIGRA_MATH_FUNC_HELPER(signed int)
+VIGRA_MATH_FUNC_HELPER(signed long)
+VIGRA_MATH_FUNC_HELPER(signed long long)
+VIGRA_MATH_FUNC_HELPER(float)
+VIGRA_MATH_FUNC_HELPER(double)
+VIGRA_MATH_FUNC_HELPER(long double)
+
+
+
+#undef VIGRA_MATH_FUNC_HELPER
+
 
 } // namespace vigra
 

@@ -38,12 +38,18 @@
 #include <iterator>
 #include <algorithm>
 #include <queue>
+#include <set>
+
 #include "vigra/unittest.hxx"
 #include "vigra/accessor.hxx"
 #include "vigra/array_vector.hxx"
 #include "vigra/copyimage.hxx"
 #include "vigra/sized_int.hxx"
-#include "vigra/bucket_queue.hxx"
+
+#include "vigra/priority_queue.hxx"
+#include "vigra/algorithm.hxx"
+#include "vigra/compression.hxx"
+#include "vigra/multi_blocking.hxx"
 
 using namespace vigra;
 
@@ -219,12 +225,36 @@ struct ArrayVectorTest
         shouldEqualSequence(vector_.begin(), vector_.end(), data);
     }
 
+    void testBackInsertion_failedOnVC14()
+    {
+        // regression test for bug appearing with VC14,
+        // see https://github.com/ukoethe/vigra/issues/256
+      
+        shouldEqual(vector_.size(), 0u);
+
+        // the bug is triggered when reserve()ing a capacity of 1024,
+        // which results in a memory block of 4096 bytes and thus
+        // reaches a "big allocation" threshold in VC14's
+        // std::allocator
+        const unsigned int N = 1030u;
+        const value_type value = 42;
+
+        std::fill_n(std::back_inserter(vector_), N, value);
+        
+        shouldEqual(vector_.size(), N);
+        shouldEqual(vector_[0], value);
+        shouldEqual(vector_[N-1], value);
+    }
+
     void testAmbiguousConstructor()
     {
         ArrayVector<std::ptrdiff_t> a(2, std::ptrdiff_t(1));
         ArrayVector<std::ptrdiff_t> b(a.begin(), a.end());
     }
 };
+
+
+
 
 struct BucketQueueTest
 {
@@ -373,6 +403,671 @@ struct BucketQueueTest
     }
 };
 
+
+struct ChangeablePriorityQueueTest
+{
+    typedef ChangeablePriorityQueue<float, std::less<float>    > MinQueueType;
+    typedef ChangeablePriorityQueue<float, std::greater<float> > MaxQueueType;
+
+    ChangeablePriorityQueueTest()
+    {
+
+    }
+
+
+    void testMinQueue(){
+        const float tol=0.001;
+        {
+            MinQueueType q(4);
+
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => NONE
+            // 2 => NONE
+            // 3 => NONE
+            should(q.empty());
+            shouldEqual(q.size(),0);
+            should(!q.contains(0));
+            should(!q.contains(1));
+            should(!q.contains(2));
+            should(!q.contains(3));
+
+
+
+            q.push(0,3.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => NONE
+            // 2 => NONE
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),1);
+            should( q.contains(0));
+            should(!q.contains(1));
+            should(!q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            //shouldEqualTolerance(q.priority(1),3.0, tol);
+            //shouldEqualTolerance(q.priority(2),3.0, tol);
+            //shouldEqualTolerance(q.priority(3),3.0, tol);
+            shouldEqual(q.top(),0);
+            shouldEqualTolerance(q.topPriority(),3.0,tol);
+
+
+            q.push(2,2.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => NONE
+            // 2 => 2.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),2);
+            should( q.contains(0));
+            should(!q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            //shouldEqualTolerance(q.priority(1),3.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),3.0, tol);
+            shouldEqual(q.top(),2);
+            shouldEqualTolerance(q.topPriority(),2.0,tol);
+
+
+            q.push(1,3.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 3.0
+            // 2 => 2.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),3);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),3.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),3.0, tol);
+            shouldEqual(q.top(),2);
+            shouldEqualTolerance(q.topPriority(),2.0,tol);
+
+
+            q.push(3,0.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 3.0
+            // 2 => 2.0
+            // 3 => 0.0
+            should(!q.empty());
+            shouldEqual(q.size(),4);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should( q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),3.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            shouldEqualTolerance(q.priority(3),0.0, tol);
+            shouldEqual(q.top(),3);
+            shouldEqualTolerance(q.topPriority(),0.0,tol);
+
+            q.pop();
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 3.0
+            // 2 => 2.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),3);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),3.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),0.0, 0.01);
+            shouldEqual(q.top(),2);
+            shouldEqualTolerance(q.topPriority(),2.0,tol);
+
+
+            q.push(1,1.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 1.0
+            // 2 => 2.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),3);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),1.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),0.0, 0.01);
+            shouldEqual(q.top(),1);
+            shouldEqualTolerance(q.topPriority(),1.0,tol);
+
+            q.push(1,4.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 4.0
+            // 2 => 2.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),3);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),4.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),0.0, 0.01);
+            shouldEqual(q.top(),2);
+            shouldEqualTolerance(q.topPriority(),2.0,tol);
+
+
+            q.push(0,1.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 1.0
+            // 1 => 4.0
+            // 2 => 2.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),3);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),1.0, tol);
+            shouldEqualTolerance(q.priority(1),4.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),0.0, 0.01);
+            shouldEqual(q.top(),0);
+            shouldEqualTolerance(q.topPriority(),1.0,tol);
+
+
+            q.pop();
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => 4.0
+            // 2 => 2.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),2);
+            should(!q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            //shouldEqualTolerance(q.priority(0),1.0, tol);
+            shouldEqualTolerance(q.priority(1),4.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),0.0, 0.01);
+            shouldEqual(q.top(),2);
+            shouldEqualTolerance(q.topPriority(),2.0,tol);
+
+
+            q.pop();
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => 4.0
+            // 2 => NONE
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),1);
+            should(!q.contains(0));
+            should( q.contains(1));
+            should(!q.contains(2));
+            should(!q.contains(3));
+            //shouldEqualTolerance(q.priority(0),1.0, tol);
+            shouldEqualTolerance(q.priority(1),4.0, tol);
+            //shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),0.0, 0.01);
+            shouldEqual(q.top(),1);
+            shouldEqualTolerance(q.topPriority(),4.0,tol);
+
+
+            q.pop();
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => NONE
+            // 2 => NONE
+            // 3 => NONE
+            should(q.empty());
+            shouldEqual(q.size(),0);
+            should(!q.contains(0));
+            should(!q.contains(1));
+            should(!q.contains(2));
+            should(!q.contains(3));
+            //shouldEqualTolerance(q.priority(0),1.0, tol);
+            //shouldEqualTolerance(q.priority(1),4.0, tol);
+            //shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),0.0, 0.01);
+            //shouldEqual(q.top(),1);
+            //shouldEqualTolerance(q.topPriority(),4.0,tol);
+
+        }
+
+    }
+
+    void testMaxQueue(){
+        const float tol=0.001;
+        {
+            MaxQueueType q(4);
+
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => NONE
+            // 2 => NONE
+            // 3 => NONE
+            should(q.empty());
+            shouldEqual(q.size(),0);
+            should(!q.contains(0));
+            should(!q.contains(1));
+            should(!q.contains(2));
+            should(!q.contains(3));
+
+
+
+            q.push(0,3.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => NONE
+            // 2 => NONE
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),1);
+            should( q.contains(0));
+            should(!q.contains(1));
+            should(!q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            //shouldEqualTolerance(q.priority(1),3.0, tol);
+            //shouldEqualTolerance(q.priority(2),3.0, tol);
+            //shouldEqualTolerance(q.priority(3),3.0, tol);
+            shouldEqual(q.top(),0);
+            shouldEqualTolerance(q.topPriority(),3.0,tol);
+
+
+            q.push(2,2.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => NONE
+            // 2 => 2.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),2);
+            should( q.contains(0));
+            should(!q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            //shouldEqualTolerance(q.priority(1),3.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),3.0, tol);
+            shouldEqual(q.top(),0);
+            shouldEqualTolerance(q.topPriority(),3.0,tol);
+
+
+            q.push(1,4.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 4.0
+            // 2 => 2.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),3);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),4.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            //shouldEqualTolerance(q.priority(3),3.0, tol);
+            shouldEqual(q.top(),1);
+            shouldEqualTolerance(q.topPriority(),4.0,tol);
+
+
+            q.push(3,5.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 4.0
+            // 2 => 2.0
+            // 3 => 5.0
+            should(!q.empty());
+            shouldEqual(q.size(),4);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should( q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),4.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            shouldEqualTolerance(q.priority(3),5.0, tol);
+            shouldEqual(q.top(),3);
+            shouldEqualTolerance(q.topPriority(),5.0,tol);
+
+
+            q.push(3,2.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 4.0
+            // 2 => 2.0
+            // 3 => 2.0
+            should(!q.empty());
+            shouldEqual(q.size(),4);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should( q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),4.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            shouldEqualTolerance(q.priority(3),2.0, tol);
+            shouldEqual(q.top(),1);
+            shouldEqualTolerance(q.topPriority(),4.0,tol);
+
+
+            q.push(1,0.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 0.0
+            // 2 => 2.0
+            // 3 => 2.0
+            should(!q.empty());
+            shouldEqual(q.size(),4);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should( q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),0.0, tol);
+            shouldEqualTolerance(q.priority(2),2.0, tol);
+            shouldEqualTolerance(q.priority(3),2.0, tol);
+            shouldEqual(q.top(),0);
+            shouldEqualTolerance(q.topPriority(),3.0,tol);
+
+            q.push(2,5.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 0.0
+            // 2 => 5.0
+            // 3 => 2.0
+            should(!q.empty());
+            shouldEqual(q.size(),4);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should( q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),0.0, tol);
+            shouldEqualTolerance(q.priority(2),5.0, tol);
+            shouldEqualTolerance(q.priority(3),2.0, tol);
+            shouldEqual(q.top(),2);
+            shouldEqualTolerance(q.topPriority(),5.0,tol);
+
+            q.push(3,1.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 0.0
+            // 2 => 5.0
+            // 3 => 1.0
+            should(!q.empty());
+            shouldEqual(q.size(),4);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should( q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),0.0, tol);
+            shouldEqualTolerance(q.priority(2),5.0, tol);
+            shouldEqualTolerance(q.priority(3),1.0, tol);
+            shouldEqual(q.top(),2);
+            shouldEqualTolerance(q.topPriority(),5.0,tol);
+
+
+            q.pop();
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 3.0
+            // 1 => 0.0
+            // 2 => NONE
+            // 3 => 1.0
+            should(!q.empty());
+            shouldEqual(q.size(),3);
+            should( q.contains(0));
+            should( q.contains(1));
+            should(!q.contains(2));
+            should( q.contains(3));
+            shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),0.0, tol);
+            //shouldEqualTolerance(q.priority(2),5.0, tol);
+            shouldEqualTolerance(q.priority(3),1.0, tol);
+            shouldEqual(q.top(),0);
+            shouldEqualTolerance(q.topPriority(),3.0,tol);
+
+
+
+            q.pop();
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => 0.0
+            // 2 => NONE
+            // 3 => 1.0
+            should(!q.empty());
+            shouldEqual(q.size(),2);
+            should(!q.contains(0));
+            should( q.contains(1));
+            should(!q.contains(2));
+            should( q.contains(3));
+            //shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),0.0, tol);
+            //shouldEqualTolerance(q.priority(2),5.0, tol);
+            shouldEqualTolerance(q.priority(3),1.0, tol);
+            shouldEqual(q.top(),3);
+            shouldEqualTolerance(q.topPriority(),1.0,tol);
+
+
+            q.pop();
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => 0.0
+            // 2 => NONE
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),1);
+            should(!q.contains(0));
+            should( q.contains(1));
+            should(!q.contains(2));
+            should(!q.contains(3));
+            //shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),0.0, tol);
+            //shouldEqualTolerance(q.priority(2),5.0, tol);
+            //shouldEqualTolerance(q.priority(3),1.0, tol);
+            shouldEqual(q.top(),1);
+            shouldEqualTolerance(q.topPriority(),0.0,tol);
+
+            q.pop();
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => NONE
+            // 2 => NONE
+            // 3 => NONE
+            should(q.empty());
+            shouldEqual(q.size(),0);
+            should(!q.contains(0));
+            should(!q.contains(1));
+            should(!q.contains(2));
+            should(!q.contains(3));
+            //shouldEqualTolerance(q.priority(0),3.0, tol);
+            //shouldEqualTolerance(q.priority(1),0.0, tol);
+            //shouldEqualTolerance(q.priority(2),5.0, tol);
+            //shouldEqualTolerance(q.priority(3),1.0, tol);
+            //shouldEqual(q.top(),1);
+            //shouldEqualTolerance(q.topPriority(),0.0,tol);
+
+            q.push(2,1.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => NONE
+            // 2 => 1.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),1);
+            should(!q.contains(0));
+            should(!q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            //shouldEqualTolerance(q.priority(0),3.0, tol);
+            //shouldEqualTolerance(q.priority(1),0.0, tol);
+            shouldEqualTolerance(q.priority(2),1.0, tol);
+            //shouldEqualTolerance(q.priority(3),1.0, tol);
+            shouldEqual(q.top(),2);
+            shouldEqualTolerance(q.topPriority(),1.0,tol);
+
+
+            q.push(2,3.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => NONE
+            // 2 => 3.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),1);
+            should(!q.contains(0));
+            should(!q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            //shouldEqualTolerance(q.priority(0),3.0, tol);
+            //shouldEqualTolerance(q.priority(1),0.0, tol);
+            shouldEqualTolerance(q.priority(2),3.0, tol);
+            //shouldEqualTolerance(q.priority(3),1.0, tol);
+            shouldEqual(q.top(),2);
+            shouldEqualTolerance(q.topPriority(),3.0,tol);
+
+
+            q.push(1,4.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => NONE
+            // 1 => 4.0
+            // 2 => 3.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),2);
+            should(!q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            //shouldEqualTolerance(q.priority(0),3.0, tol);
+            shouldEqualTolerance(q.priority(1),4.0, tol);
+            shouldEqualTolerance(q.priority(2),3.0, tol);
+            //shouldEqualTolerance(q.priority(3),1.0, tol);
+            shouldEqual(q.top(),1);
+            shouldEqualTolerance(q.topPriority(),4.0,tol);
+
+
+            q.push(0,2.0);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 2.0
+            // 1 => 4.0
+            // 2 => 3.0
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),3);
+            should( q.contains(0));
+            should( q.contains(1));
+            should( q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),2.0, tol);
+            shouldEqualTolerance(q.priority(1),4.0, tol);
+            shouldEqualTolerance(q.priority(2),3.0, tol);
+            //shouldEqualTolerance(q.priority(3),1.0, tol);
+            shouldEqual(q.top(),1);
+            shouldEqualTolerance(q.topPriority(),4.0,tol);
+
+
+            q.deleteItem(2);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 2.0
+            // 1 => 4.0
+            // 2 => NONE
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),2);
+            should( q.contains(0));
+            should( q.contains(1));
+            should(!q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),2.0, tol);
+            shouldEqualTolerance(q.priority(1),4.0, tol);
+            //shouldEqualTolerance(q.priority(2),3.0, tol);
+            //shouldEqualTolerance(q.priority(3),1.0, tol);
+            shouldEqual(q.top(),1);
+            shouldEqualTolerance(q.topPriority(),4.0,tol);
+
+
+            q.deleteItem(1);
+            // CURRENT VALUES
+            //-----------------
+            // 0 => 2.0
+            // 1 => 4.0
+            // 2 => NONE
+            // 3 => NONE
+            should(!q.empty());
+            shouldEqual(q.size(),1);
+            should( q.contains(0));
+            should(!q.contains(1));
+            should(!q.contains(2));
+            should(!q.contains(3));
+            shouldEqualTolerance(q.priority(0),2.0, tol);
+            //shouldEqualTolerance(q.priority(1),4.0, tol);
+            //shouldEqualTolerance(q.priority(2),3.0, tol);
+            //shouldEqualTolerance(q.priority(3),1.0, tol);
+            shouldEqual(q.top(),0);
+            shouldEqualTolerance(q.topPriority(),2.0,tol);
+
+        }
+
+    }
+};
+
+
+
 struct SizedIntTest
 {
     void testSizedInt()
@@ -458,12 +1153,56 @@ struct MetaprogrammingTest
         should(typeid(UnqualifiedType<int*&>::type) == typeid(int));
         should(typeid(UnqualifiedType<const int*&>::type) == typeid(int));
     }
+
+#if 0
+    struct FinallyTester
+    {
+        mutable int & v_;
+
+        FinallyTester(int & v)
+            : v_(v)
+        {}
+        
+        void sq() const
+        {
+            v_ = v_*v_;
+        }
+    };
+#endif
+
+    void testFinally()
+    {
+        std::cout << "testFinally() is disabled because many compilers do not yet support it." << std::endl;
+#if 0
+        int v = 0;
+        {
+            FinallyTester finally_tester(v);
+            VIGRA_FINALLY(finally_tester.sq());
+
+            VIGRA_FINALLY({ 
+                v = 3;
+            });
+            shouldEqual(v, 0);
+        }
+        shouldEqual(v, 9);
+
+        try {
+            VIGRA_FINALLY(v = 2);
+
+            throw std::runtime_error("");
+
+            VIGRA_FINALLY(v = 3);
+        }
+        catch(std::runtime_error &) {}
+        shouldEqual(v, 2);
+#endif
+    }
 };
 
 void stringTest()
 {
     std::string s;
-    s << "Hallo " << 1 << " " << 2.0 << " " << false;
+    s = s << "Hallo " << 1 << " " << 2.0 << " " << false;
     shouldEqual(s, std::string("Hallo 1 2 0"));
 
     shouldEqual(asString(1), "1");
@@ -474,12 +1213,222 @@ void stringTest()
     shouldEqual(normalizeString("AluFr iNsta< Z89>"), "alufrinsta<z89>");
 }
 
+struct CompressionTest
+{
+    ArrayVector<char> data;
+    
+    CompressionTest()
+    : data(1000000)
+    {
+        linearSequence(data.begin(), data.end(), 0);
+    }
+    
+    void testZLIB()
+    {
+        ArrayVector<char> compressed;
+    #ifdef HasZLIB
+        compress(data.begin(), data.size(), compressed, ZLIB);
+        
+        shouldEqual(compressed.size(), 4206);
+        
+        ArrayVector<char> decompressed(data.size());
+        
+        uncompress(compressed.begin(), compressed.size(),
+                   decompressed.begin(), decompressed.size(), ZLIB);
+                   
+        shouldEqualSequence(data.begin(), data.end(), decompressed.begin());
+    #else
+        try
+        {
+            compress(data.begin(), data.size(), compressed, ZLIB);
+            failTest("missing ZLIB did not throw exception.");
+        }
+        catch(ContractViolation & c)
+        {
+            std::string expected("\nPrecondition violation!\ncompress(): VIGRA was compiled without ZLIB compression.");
+            std::string message(c.what());
+            should(0 == expected.compare(message.substr(0,expected.size())));
+        }
+        
+    #endif
+    }
+    
+    void testLZ4()
+    {
+        ArrayVector<char> compressed;
+        compress(data.begin(), data.size(), compressed, LZ4);
+        
+        shouldEqual(compressed.size(), 4187);
+        
+        ArrayVector<char> decompressed(data.size());
+        
+        uncompress(compressed.begin(), compressed.size(),
+                   decompressed.begin(), decompressed.size(), LZ4);
+                   
+        shouldEqualSequence(data.begin(), data.end(), decompressed.begin());
+    }
+    
+    void testNoCompression()
+    {
+        ArrayVector<char> compressed;
+        compress(data.begin(), data.size(), compressed, NO_COMPRESSION);
+        
+        shouldEqual(compressed.size(), data.size());
+        
+        ArrayVector<char> decompressed(data.size());
+        
+        uncompress(compressed.begin(), compressed.size(),
+                   decompressed.begin(), decompressed.size(), NO_COMPRESSION);
+                   
+        shouldEqualSequence(data.begin(), data.end(), decompressed.begin());
+    }
+};
+
+
+struct MultiBlockingTest
+{
+    void test2d()
+    {
+        typedef MultiBlocking<2> Mb;
+        typedef Mb::Shape Shape;
+        typedef Mb::Block Block;
+        typedef Mb::Block Block;
+
+        typedef Mb::BlockWithBorder BlockWithBorder;
+        typedef Mb::BlockWithBorderIter BlockWithBorderIter;
+        typedef Mb::BlockIter BlockIter;
+        {
+            Shape shape(10,11), blockShape(4,5);
+            Mb blocking(shape, blockShape);
+            shouldEqual(blocking.numBlocks(),9);
+
+
+            BlockWithBorderIter bwbIter  = blocking.blockWithBorderBegin(Shape(1));
+            BlockIter bIter = blocking.blockBegin();
+
+            // get the first block 
+            shouldEqual(bIter[0].begin()[0], 0);
+            shouldEqual(bIter[0].begin()[1], 0);
+            shouldEqual(bIter[0].end()[0], 4);
+            shouldEqual(bIter[0].end()[1], 5);
+
+            // get the second block
+            const Block b1 = bIter[1];
+            shouldEqual(b1.begin()[0], 4);
+            shouldEqual(b1.begin()[1], 0);
+            shouldEqual(b1.end()[0], 8);
+            shouldEqual(b1.end()[1], 5);
+
+            // get the third block
+            Block b2 = bIter[2];
+            shouldEqual(b2.begin()[0], 8);
+            shouldEqual(b2.begin()[1], 0);
+            shouldEqual(b2.end()[0], 10);
+            shouldEqual(b2.end()[1], 5);
+
+            //  first block with border
+            const BlockWithBorder bb0 = bwbIter[0];
+            shouldEqual(bb0.core().begin()[0], 0);
+            shouldEqual(bb0.core().begin()[1], 0);
+            shouldEqual(bb0.core().end()[0], 4);
+            shouldEqual(bb0.core().end()[1], 5);
+
+            shouldEqual(bb0.border().begin()[0], 0);
+            shouldEqual(bb0.border().begin()[1], 0);
+            shouldEqual(bb0.border().end()[0], 5);
+            shouldEqual(bb0.border().end()[1], 6);
+
+            //  second block with border
+            const BlockWithBorder bb1 = bwbIter[1];
+            shouldEqual(bb1.core().begin()[0], 4);
+            shouldEqual(bb1.core().begin()[1], 0);
+            shouldEqual(bb1.core().end()[0], 8);
+            shouldEqual(bb1.core().end()[1], 5);
+
+            shouldEqual(bb1.border().begin()[0], 3);
+            shouldEqual(bb1.border().begin()[1], 0);
+            shouldEqual(bb1.border().end()[0], 9);
+            shouldEqual(bb1.border().end()[1], 6);
+
+            //  third block with border
+            const BlockWithBorder bb2 = bwbIter[2];
+            shouldEqual(bb2.core().begin()[0], 8);
+            shouldEqual(bb2.core().begin()[1], 0);
+            shouldEqual(bb2.core().end()[0], 10);
+            shouldEqual(bb2.core().end()[1], 5);
+
+            shouldEqual(bb2.border().begin()[0], 7);
+            shouldEqual(bb2.border().begin()[1], 0);
+            shouldEqual(bb2.border().end()[0], 10);
+            shouldEqual(bb2.border().end()[1], 6);
+        }
+    }
+
+
+    void test2dWithRoi()
+    {
+        typedef MultiBlocking<2> Mb;
+        typedef Mb::Shape Shape;
+        //typedef Mb::Block Block;
+        typedef Mb::BlockIter BlockIter;
+        //typedef Mb::BlockWithBorder BlockWithBorder;
+        {
+            
+
+            Shape shape(13,14), blockShape(4,5), roiBegin(1,2), roiEnd(9,11);
+            Mb blocking(shape, blockShape, roiBegin, roiEnd);
+            shouldEqual(blocking.numBlocks(),4);
+
+            BlockIter bIter = blocking.blockBegin();
+
+            shouldEqual(bIter[0].begin(), Shape(1,2));
+            shouldEqual(bIter[0].end(),   Shape(5,7));
+            shouldEqual(bIter[1].begin(), Shape(5,2));
+            shouldEqual(bIter[1].end(),   Shape(9,7));
+            shouldEqual(bIter[2].begin(), Shape(1,7));
+            shouldEqual(bIter[2].end(),   Shape(5,11));
+            shouldEqual(bIter[3].begin(), Shape(5,7));
+            shouldEqual(bIter[3].end(),   Shape(9,11));
+        }
+    }
+
+    void test2dIterator()
+    {
+        typedef MultiBlocking<2> Mb;
+        typedef Mb::Shape Shape;
+        //typedef  Mb::Block Block;
+        typedef Mb::BlockWithBorder BlockWithBorder;
+        typedef  Mb::BlockWithBorderIter BlockWithBorderIter;
+        {
+            Shape shape(13,14), blockShape(4,5), roiBegin(1,2), roiEnd(9,11), width(2,3);
+            Mb blocking(shape, blockShape, roiBegin, roiEnd);
+            shouldEqual(blocking.numBlocks(),4);
+            
+            {
+                std::vector<BlockWithBorder> bwbVec(blocking.blockWithBorderBegin(width), 
+                                                    blocking.blockWithBorderEnd(width));
+                shouldEqual(bwbVec.size(),4);
+            }
+
+            BlockWithBorderIter begin  = blocking.blockWithBorderBegin(width);
+            BlockWithBorderIter end    = begin.getEndIterator();
+            shouldEqual(begin+4==end, true);
+        }   
+    }
+};
+
+
+
 struct UtilitiesTestSuite
 : public vigra::test_suite
 {
     UtilitiesTestSuite()
     : vigra::test_suite("UtilitiesTestSuite")
     {
+        add( testCase( &MultiBlockingTest::test2d));
+        add( testCase( &MultiBlockingTest::test2dWithRoi));
+        add( testCase( &MultiBlockingTest::test2dIterator));
+
         add( testCase( &ArrayVectorTest::testAccessor));
         add( testCase( &ArrayVectorTest::testBackInsertion));
         add( testCase( &ArrayVectorTest::testAmbiguousConstructor));
@@ -487,11 +1436,17 @@ struct UtilitiesTestSuite
         add( testCase( &BucketQueueTest::testAscending));
         add( testCase( &BucketQueueTest::testDescendingMapped));
         add( testCase( &BucketQueueTest::testAscendingMapped));
+        add( testCase( &ChangeablePriorityQueueTest::testMinQueue));
+        add( testCase( &ChangeablePriorityQueueTest::testMaxQueue));
         add( testCase( &SizedIntTest::testSizedInt));
         add( testCase( &MetaprogrammingTest::testInt));
         add( testCase( &MetaprogrammingTest::testLogic));
         add( testCase( &MetaprogrammingTest::testTypeTools));
+        add( testCase( &MetaprogrammingTest::testFinally));
         add( testCase( &stringTest));
+        add( testCase( &CompressionTest::testZLIB));
+        add( testCase( &CompressionTest::testLZ4));
+        add( testCase( &CompressionTest::testNoCompression));
     }
 };
 

@@ -49,6 +49,11 @@ namespace vigra {
 #pragma warning( disable : 4503 )
 #endif
 
+#ifdef __APPLE__
+#include <AssertMacros.h>
+#undef check
+#endif
+
 template <int N>
 class MetaInt
 {
@@ -88,29 +93,36 @@ struct VigraFalseType
 
 /********************************************************/
 /*                                                      */
-/*                   StridedArrayTag                    */
+/*          tags for MultiArray memory layout           */
 /*                                                      */
 /********************************************************/
 
 /** tag for marking a MultiArray strided.
 
-    <b>\#include</b> \<vigra/multi_array.hxx\> <br/>
+    <b>\#include</b> \<vigra/metaprogramming.hxx\> <br/>
     Namespace: vigra
 */
 struct StridedArrayTag {};
 
-/********************************************************/
-/*                                                      */
-/*                  UnstridedArrayTag                   */
-/*                                                      */
-/********************************************************/
-
 /** tag for marking a MultiArray unstrided.
 
-    <b>\#include</b> \<vigra/multi_array.hxx\> <br/>
+    <b>\#include</b> \<vigra/metaprogramming.hxx\> <br/>
     Namespace: vigra
 */
 struct UnstridedArrayTag {};
+
+/** tag for marking a MultiArray chunked.
+
+    <b>\#include</b> \<vigra/metaprogramming.hxx\> <br/>
+    Namespace: vigra
+*/
+struct ChunkedArrayTag {};
+
+/********************************************************/
+/*                                                      */
+/*                      TypeTraits                      */
+/*                                                      */
+/********************************************************/
 
 template<class T>
 class TypeTraits
@@ -393,7 +405,7 @@ struct IsDerivedFrom
     static falseResult * testIsDerivedFrom(...);
     static trueResult * testIsDerivedFrom(BASE const *);
     
-    enum { resultSize = sizeof(*testIsDerivedFrom((DERIVED const *)0)) };
+    enum { resultSize = sizeof(*testIsDerivedFrom(static_cast<DERIVED const *>(0))) };
     
     static const bool value = (resultSize == 2);
     typedef typename 
@@ -408,33 +420,47 @@ template <class T>
 struct UnqualifiedType
 {
     typedef T type;
+    static const bool isConst = false;
+    static const bool isReference = false;
+    static const bool isPointer = false;
 };
 
 template <class T>
 struct UnqualifiedType<T const>
 {
     typedef T type;
+    static const bool isConst = true;
+    static const bool isReference = false;
+    static const bool isPointer = false;
 };
 
 template <class T>
 struct UnqualifiedType<T &>
 : public UnqualifiedType<T>
-{};
+{
+    static const bool isReference = true;
+};
 
 template <class T>
 struct UnqualifiedType<T const &>
-: public UnqualifiedType<T>
-{};
+: public UnqualifiedType<T const>
+{
+    static const bool isReference = true;
+};
 
 template <class T>
 struct UnqualifiedType<T *>
 : public UnqualifiedType<T>
-{};
+{
+    static const bool isPointer = true;
+};
 
 template <class T>
 struct UnqualifiedType<T const *>
-: public UnqualifiedType<T>
-{};
+: public UnqualifiedType<T const>
+{
+    static const bool isPointer = true;
+};
 
 template <bool, class T = void>
 struct enable_if {};
@@ -452,7 +478,7 @@ struct sfinae_test
     static falseResult * test(...);
     static trueResult * test(USER<sfinae_void>);
     
-    enum { resultSize = sizeof(*test((T*)0)) };
+    enum { resultSize = sizeof(*test(static_cast<T*>(0))) };
     
     static const bool value = (resultSize == 2);
     typedef typename
@@ -526,7 +552,7 @@ struct IsArray
     template <class U, unsigned n>
     static trueResult * test(U (*)[n]);
     
-    enum { resultSize = sizeof(*test((T*)0)) };
+    enum { resultSize = sizeof(*test(static_cast<T*>(0))) };
     
     static const bool value = (resultSize == 2);
     typedef typename
@@ -659,7 +685,7 @@ struct MetaPow<X, 0>
 template<class HEAD, class TAIL=void>
 struct TypeList
 {
-	typedef TypeList<HEAD, TAIL> type;
+    typedef TypeList<HEAD, TAIL> type;
     typedef HEAD Head;
     typedef TAIL Tail;
 };

@@ -560,6 +560,11 @@ void defineConvolutionFunctions()
         (arg("volume"), arg("dim"), arg("kernel"), arg("out")=python::object()), 
         "Likewise for a 3D scalar or multiband volume.\n");
 
+    def("convolveOneDimension",
+        registerConverters(&pythonConvolveOneDimensionND<float,5>),
+        (arg("volume"), arg("dim"), arg("kernel"), arg("out")=python::object()), 
+        "Likewise for a 4D scalar or multiband volume.\n");
+
     def("convolve", registerConverters(&pythonSeparableConvolveND_1Kernel<float,3>),
         (arg("image"), arg("kernel"), arg("out")=python::object()),
         "Convolve an image with the given 'kernel' (or kernels).\n"
@@ -601,6 +606,12 @@ void defineConvolutionFunctions()
         "are ignored in the convolution. The mask must have one channel (which is then "
         "used for all channels input channels) or as many channels as the input image.\n\n"
         "For details, see normalizedConvolveImage_ in the C++ documentation.\n");
+
+    def("gaussianSmoothing",
+        registerConverters(&pythonGaussianSmoothing<float,2>),
+        (arg("array"), arg("sigma"), arg("out")=python::object(), 
+         arg("sigma_d")=0.0, arg("step_size")=1.0, arg("window_size")=0.0, arg("roi")=python::object()),
+        "Smooth 1D sequence with Gaussian.\n");
 
     def("gaussianSmoothing",
         registerConverters(&pythonGaussianSmoothing<float,3>),

@@ -85,7 +85,7 @@ struct MultiBinaryMorphologyImpl
                                  : NumericTraits<DestType>::zero();
         transformMultiArray( tmpArray.traverser_begin(), shape, StandardValueAccessor<double>(), 
                              d, dest, 
-                             ifThenElse( Arg1() >= Param(radius2),
+                             ifThenElse( Arg1() > Param(radius2),
                                          Param(foreground), Param(background) ) );
     }
 };
@@ -479,9 +479,6 @@ multiGrayscaleErosion( SrcIterator s, SrcShape const & shape, SrcAccessor src,
     // temporary array to hold the current line to enable in-place operation
     ArrayVector<TmpType> tmp( shape[0] );
         
-    typedef MultiArrayNavigator<SrcIterator, N> SNavigator;
-    typedef MultiArrayNavigator<DestIterator, N> DNavigator;
-    
     int MaxDim = 0; 
     for( int i=0; i<N; i++)
         if(MaxDim < shape[i]) MaxDim = shape[i];
@@ -623,9 +620,6 @@ void multiGrayscaleDilation( SrcIterator s, SrcShape const & shape, SrcAccessor 
         
     // temporary array to hold the current line to enable in-place operation
     ArrayVector<TmpType> tmp( shape[0] );
-        
-    typedef MultiArrayNavigator<SrcIterator, N> SNavigator;
-    typedef MultiArrayNavigator<DestIterator, N> DNavigator;
     
     int MaxDim = 0; 
     for( int i=0; i<N; i++)

@@ -58,7 +58,8 @@ class AxisInfo
                     Angle = 4, 
                     Time = 8, 
                     Frequency = 16, 
-                    UnknownAxisType = 32, 
+                    Edge = 32,
+                    UnknownAxisType = 64, 
                     NonChannel = Space | Angle | Time | Frequency | UnknownAxisType,
                     AllAxes = 2*UnknownAxisType-1 };
 
@@ -125,6 +126,11 @@ class AxisInfo
     bool isFrequency() const
     {
         return isType(Frequency);
+    }
+
+    bool isEdge() const
+    {
+        return isType(Edge);
     }
     
     bool isAngular() const
@@ -255,7 +261,17 @@ class AxisInfo
     {
         return AxisInfo("z", Space, resolution, description);
     }
+
+    static AxisInfo n(double resolution = 0.0, std::string const & description = "")
+    {
+        return AxisInfo("n", Space, resolution, description);
+    }
     
+    static AxisInfo e(double resolution = 0.0, std::string const & description = "")
+    {
+        return AxisInfo("e", Edge, resolution, description);
+    }
+
     static AxisInfo t(double resolution = 0.0, std::string const & description = "")
     {
         return AxisInfo("t", Time, resolution, description);
@@ -339,6 +355,57 @@ class AxisTags
         push_back(i5);
     }
     
+    AxisTags(std::string const & tags)
+    {
+        for(int k=0; k<tags.size(); ++k)
+        {
+            switch(tags[k])
+            {
+              case 'x':
+                push_back(AxisInfo::x());
+                break;
+              case 'y':
+                push_back(AxisInfo::y());
+                break;
+              case 'z':
+                push_back(AxisInfo::z());
+                break;
+              case 't':
+                push_back(AxisInfo::t());
+                break;
+              case 'c':
+                push_back(AxisInfo::c());
+                break;
+              case 'f':
+                ++k;
+                vigra_precondition(k < tags.size(),
+                    "AxisTags(string): invalid input");
+                switch(tags[k])
+                {
+                  case 'x':
+                    push_back(AxisInfo::fx());
+                    break;
+                  case 'y':
+                    push_back(AxisInfo::fy());
+                    break;
+                  case 'z':
+                    push_back(AxisInfo::fz());
+                    break;
+                  case 't':
+                    push_back(AxisInfo::ft());
+                    break;
+                  default:
+                    vigra_precondition(false,
+                        "AxisTags(string): invalid input");
+                }
+                break;
+              default:
+                vigra_precondition(false,
+                    "AxisTags(string): invalid input");
+            }
+        }
+    }
+    
     // static AxisTags fromJSON(std::string const & repr);
 
     std::string toJSON() const
@@ -386,6 +453,11 @@ class AxisTags
             res += axes_[k].key();
         }
         return res;
+    }
+    
+    bool contains(std::string const & key) const
+    {
+        return index(key) < (int)size();
     }
     
     AxisInfo & get(int k)

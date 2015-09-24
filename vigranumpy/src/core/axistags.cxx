@@ -118,6 +118,16 @@ AxisInfo AxisInfo_z()
     return AxisInfo::z();
 }
 
+AxisInfo AxisInfo_n()
+{
+    return AxisInfo::n();
+}
+
+AxisInfo AxisInfo_e()
+{
+    return AxisInfo::e();
+}
+
 AxisInfo AxisInfo_t()
 {
     return AxisInfo::t();
@@ -187,6 +197,10 @@ AxisTags_create(python::object i1, python::object i2,
     if(tags.check())
     {
         res = VIGRA_UNIQUE_PTR<AxisTags>(new AxisTags(tags()));
+    }
+    else if(PyString_Check(i1.ptr()))
+    {
+        res = VIGRA_UNIQUE_PTR<AxisTags>(new AxisTags(python::extract<std::string>(i1)()));
     }
     else if(PySequence_Check(i1.ptr()))
     {
@@ -296,6 +310,27 @@ std::string AxisTags_str(AxisTags const & axistags)
     for(unsigned int k=0; k<axistags.size(); ++k)
         res += axistags.get(k).repr() + "\n";
     return res;
+}
+
+python::list AxisTags_keys(AxisTags const & axistags)
+{
+    python::list res;
+    for(unsigned int k=0; k<axistags.size(); ++k)
+        res.append(axistags.get(k).key());
+    return res;
+}
+
+python::list AxisTags_values(AxisTags const & axistags)
+{
+    python::list res;
+    for(unsigned int k=0; k<axistags.size(); ++k)
+        res.append(axistags.get(k));
+    return res;
+}
+
+bool AxisTags_contains(AxisTags const & axistags, AxisInfo const & axisinfo)
+{
+    return axistags.contains(axisinfo.key());
 }
 
 python::object
@@ -480,6 +515,7 @@ void defineAxisTags()
          ":class:`~vigra.AxisInfo` object. Possible values:\n\n"
          "   ``AxisType.Channels:``\n      a channel axis\n"
          "   ``AxisType.Space:``\n      a spatial axis\n"
+         "   ``AxisType.Edge:``\n      an edge axis\n"
          "   ``AxisType.Angle:``\n      an axis encoding angles (e.g. polar coordinates)\n"
          "   ``AxisType.Time:``\n      a temporal axis\n"
          "   ``AxisType.Frequency:``\n      an axis in the Fourier domain\n"
@@ -491,6 +527,7 @@ void defineAxisTags()
         .value("UnknownAxisType", AxisInfo::UnknownAxisType)
         .value("Channels", AxisInfo::Channels)
         .value("Space", AxisInfo::Space)
+        .value("Edge", AxisInfo::Edge)
         .value("Angle", AxisInfo::Angle)
         .value("Time", AxisInfo::Time)
         .value("Frequency", AxisInfo::Frequency)
@@ -522,6 +559,10 @@ void defineAxisTags()
          "        Factory for an axisinfo object describing the 'y' (spatial) axis.\n"
          "   ``AxisInfo.z`` or ``AxisInfo.z(resolution=0.0, description='')``:\n"
          "        Factory for an axisinfo object describing the 'z' (spatial) axis.\n"
+         "   ``AxisInfo.z`` or ``AxisInfo.n(resolution=0.0, description='')``:\n"
+         "        Factory for an axisinfo object describing the 'n' (spatial) axis.\n"
+         "   ``AxisInfo.e`` or ``AxisInfo.e(resolution=0.0, description='')``:\n"
+         "        Factory for an axisinfo object describing the 'e' (edge) axis.\n"
          "   ``AxisInfo.t`` or ``AxisInfo.t(resolution=0.0, description='')``:\n"
          "        Factory for an axisinfo object describing the 't' (time) axis.\n"
          "   ``AxisInfo.fx`` or ``AxisInfo.fx(resolution=0.0, description='')``:\n"
@@ -566,8 +607,11 @@ void defineAxisTags()
         .def("toFrequencyDomain", &AxisInfo::toFrequencyDomain, (arg("size") = 0, arg("sign") = 1))
         .def("fromFrequencyDomain", &AxisInfo::fromFrequencyDomain, (arg("size") = 0))
         .def("isSpatial", &AxisInfo::isSpatial, 
-             "\naxisinfo.isSSpactial() yields True when :attr:`~vigra.AxisInfo.typeFlags` "
+             "\naxisinfo.isSpactial() yields True when :attr:`~vigra.AxisInfo.typeFlags` "
              "contains AxisType.Space\n")
+        .def("isEdge", &AxisInfo::isEdge, 
+             "\naxisinfo.isEdge() yields True when :attr:`~vigra.AxisInfo.typeFlags` "
+             "contains AxisType.Edge\n")
         .def("isTemporal", &AxisInfo::isTemporal, 
              "\naxisinfo.isTemporal() yields True when :attr:`~vigra.AxisInfo.typeFlags` "
              "contains AxisType.Time\n")
@@ -599,6 +643,8 @@ void defineAxisTags()
         .add_static_property("x", &AxisInfo_x)
         .add_static_property("y", &AxisInfo_y)
         .add_static_property("z", &AxisInfo_z)
+        .add_static_property("n", &AxisInfo_n)
+        .add_static_property("e", &AxisInfo_e)
         .add_static_property("t", &AxisInfo_t)
         .add_static_property("fx", &AxisInfo_fx)
         .add_static_property("fy", &AxisInfo_fy)
@@ -648,11 +694,15 @@ void defineAxisTags()
             (void (AxisTags::*)(std::string const &, AxisInfo const &))&AxisTags::set)
         .def("__delitem__", (void (AxisTags::*)(int))&AxisTags::dropAxis)
         .def("__delitem__", (void (AxisTags::*)(std::string const &))&AxisTags::dropAxis)
+        .def("__contains__", &AxisTags_contains)
+        .def("__contains__", &AxisTags::contains)
         .def("insert", &AxisTags::insert)
         .def("append", &AxisTags::push_back)
         .def("dropChannelAxis", &AxisTags::dropChannelAxis)
         .def("insertChannelAxis", &AxisTags_insertChannelAxis)
         .def("swapaxes", &AxisTags::swapaxes)
+        .def("keys", &AxisTags_keys)
+        .def("values", &AxisTags_values)
         
         // NOTE: in contrast to arrays, AxisTags::transpose() works
         //       in-place, i.e. changes 'self'

@@ -49,12 +49,12 @@
   #include <vigra/windows.h>  // for GetCurrentProcessId() and GetCurrentThreadId()
 #endif
 
-#if __linux__
+#ifdef __linux__
   #include <unistd.h>       // for getpid()
   #include <sys/syscall.h>  // for SYS_gettid
 #endif
 
-#if __APPLE__
+#ifdef __APPLE__
   #include <unistd.h>               // for getpid()
   #include <sys/syscall.h>          // SYS_thread_selfid
   #include <AvailabilityMacros.h>   // to check if we are on MacOS 10.6 or later
@@ -86,7 +86,7 @@ template <class Iterator, RandomEngineTag EngineTag>
 void seed(Iterator init, UInt32 key_length, RandomState<EngineTag> & engine)
 {
     const UInt32 N = RandomState<EngineTag>::N;
-    int k = (int)std::max(N, key_length);
+    int k = static_cast<int>(std::max(N, key_length));
     UInt32 i = 1, j = 0;
     Iterator data = init;
     for (; k; --k) 
@@ -128,32 +128,32 @@ void seed(RandomSeedTag, RandomState<EngineTag> & engine)
     static UInt32 globalCount = 0;
     ArrayVector<UInt32> seedData;
     
-    seedData.push_back((UInt32)time(0));
-    seedData.push_back((UInt32)clock());
+    seedData.push_back(static_cast<UInt32>(time(0)));
+    seedData.push_back(static_cast<UInt32>(clock()));
     seedData.push_back(++globalCount);
     
     std::size_t ptr((char*)&engine - (char*)0);
-    seedData.push_back((UInt32)(ptr & 0xffffffff));
+    seedData.push_back(static_cast<UInt32>((ptr & 0xffffffff)));
     static const UInt32 shift = sizeof(ptr) > 4 ? 32 : 16;
-    seedData.push_back((UInt32)(ptr >> shift));
+    seedData.push_back(static_cast<UInt32>((ptr >> shift)));
     
 #ifdef _MSC_VER
-    seedData.push_back((UInt32)GetCurrentProcessId());
-    seedData.push_back((UInt32)GetCurrentThreadId());
+    seedData.push_back(static_cast<UInt32>(GetCurrentProcessId()));
+    seedData.push_back(static_cast<UInt32>(GetCurrentThreadId()));
 #endif
 
 #ifdef __linux__
-    seedData.push_back((UInt32)getpid());
+    seedData.push_back(static_cast<UInt32>(getpid()));
 # ifdef SYS_gettid
-    seedData.push_back((UInt32)syscall(SYS_gettid));
+    seedData.push_back(static_cast<UInt32>(syscall(SYS_gettid)));
 # endif
 #endif
 
 #ifdef __APPLE__
-    seedData.push_back((UInt32)getpid());
+    seedData.push_back(static_cast<UInt32>(getpid()));
   #if defined(SYS_thread_selfid) && (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_6)
     // SYS_thread_selfid was introduced in MacOS 10.6
-    seedData.push_back((UInt32)syscall(SYS_thread_selfid));
+    seedData.push_back(static_cast<UInt32>(syscall(SYS_thread_selfid)));
   #endif
 #endif
 
@@ -371,12 +371,20 @@ class RandomNumberGenerator
         /** Create a new random generator object from the given seed.
             
             The same seed will always produce identical random sequences.
+            If \a ignoreSeed is <tt>true</tt>, the given seed is ignored,
+            and the generator is seeded randomly (as if it was constructed 
+            with <tt>RandomNumberGenerator<>(RandomSeed)</tt>). This allows 
+            you to switch between random and deterministic seeding at
+            run-time.
         */
-    RandomNumberGenerator(UInt32 theSeed)
+    RandomNumberGenerator(UInt32 theSeed, bool ignoreSeed=false)
     : normalCached_(0.0),
       normalCachedValid_(false)
     {
-        this->seedImpl(theSeed);
+        if(ignoreSeed)
+            this->seedImpl(RandomSeed);
+        else
+            this->seedImpl(theSeed);
     }
 
         /** Create a new random generator object from the given seed sequence.
@@ -414,10 +422,17 @@ class RandomNumberGenerator
         /** Re-initialize the random generator object from the given seed.
             
             The same seed will always produce identical random sequences.
+            If \a ignoreSeed is <tt>true</tt>, the given seed is ignored,
+            and the generator is seeded randomly (as if <tt>seed(RandomSeed)</tt>
+            was called). This allows you to switch between random and deterministic 
+            seeding at run-time.
         */
-    void seed(UInt32 theSeed)
+    void seed(UInt32 theSeed, bool ignoreSeed=false)
     {
-        this->seedImpl(theSeed);
+        if(ignoreSeed)
+            this->seedImpl(RandomSeed);
+        else
+            this->seedImpl(theSeed);
         normalCachedValid_ = false;
     }
 
@@ -510,7 +525,7 @@ class RandomNumberGenerator
         */
     double uniform() const
     {
-        return (double)this->get() / 4294967295.0;
+        return static_cast<double>(this->get()) / 4294967295.0;
     }
 
         /** Return a uniformly distributed double-precision random number in [lower, upper].

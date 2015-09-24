@@ -273,7 +273,7 @@ void recursiveFilterLine(SrcIterator is, SrcIterator isend, SrcAccessor as,
         {    
             TempType f = TempType(b * old);
             old = as(is) + f;
-            double norm = (1.0 - b) / (1.0 + b - bleft - bright);
+            norm = (1.0 - b) / (1.0 + b - bleft - bright);
             bleft /= b;
             bright *= b;
             ad.set(norm * (line[x] + f), id);
@@ -316,7 +316,6 @@ void recursiveFilterLine(SrcIterator is, SrcIterator isend, SrcAccessor as,
     
     typedef typename
         NumericTraits<typename SrcAccessor::value_type>::RealPromote TempType;
-    typedef NumericTraits<typename DestAccessor::value_type> DestTraits;
     
     // speichert den Ergebnis der linkseitigen Filterung.
     std::vector<TempType> vline(w+1);
@@ -469,7 +468,6 @@ recursiveGaussianFilterLine(SrcIterator is, SrcIterator isend, SrcAccessor as,
     
     typedef typename
         NumericTraits<typename SrcAccessor::value_type>::RealPromote TempType;
-    typedef NumericTraits<typename DestAccessor::value_type> DestTraits;
     
     // speichert das Ergebnis der linkseitigen Filterung.
     std::vector<TempType> yforward(w);

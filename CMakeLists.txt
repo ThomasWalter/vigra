@@ -8,8 +8,8 @@ cmake_minimum_required(VERSION 2.6)
 
 PROJECT(vigra)
 
-# read the current version from configVersion.hxx
-file(READ ${vigra_SOURCE_DIR}/include/vigra/configVersion.hxx VIGRA_VERSION_FILE)
+# read the current version from config_version.hxx
+file(READ ${vigra_SOURCE_DIR}/include/vigra/config_version.hxx VIGRA_VERSION_FILE)
 string(REGEX MATCH "VIGRA_VERSION_MAJOR[ \t\n]+[^ \t\n]+" VIGRA_VERSION_MAJOR ${VIGRA_VERSION_FILE})
 string(REGEX REPLACE "VIGRA_VERSION_MAJOR[ \t\n]" "" VIGRA_VERSION_MAJOR ${VIGRA_VERSION_MAJOR})
 string(REGEX MATCH "VIGRA_VERSION_MINOR[ \t\n]+[^ \t\n]+" VIGRA_VERSION_MINOR ${VIGRA_VERSION_FILE})
@@ -39,18 +39,46 @@ IF (MSVC)
     ADD_DEFINITIONS(-D_CRT_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_DEPRECATE)
 ENDIF ()
 
-# if(CMAKE_COMPILER_IS_GNUCXX)
-  # exec_program(
-      # ${CMAKE_CXX_COMPILER}
-      # ARGS                    --version
-      # OUTPUT_VARIABLE _compiler_output)
-  # string(REGEX REPLACE ".*([0-9]\\.[0-9]\\.[0-9]).*" "\\1"  gcc_compiler_version ${_compiler_output})
-  # if(gcc_compiler_version VERSION_LESS "4.4.0")
-      # message(FATAL_ERROR "VIGRA requires at least gcc 4.4")
-  # else()
-      # message(STATUS "Using gcc ${gcc_compiler_version} [${CMAKE_CXX_COMPILER}]")
-  # endif()
-# endif()
+IF("${CMAKE_CXX_COMPILER_ID}" MATCHES "(GNU|Clang)")
+    set(SUFFICIENT_TEMPLATE_DEPTH FALSE)
+    TRY_COMPILE(SUFFICIENT_TEMPLATE_DEPTH
+                ${CMAKE_BINARY_DIR} ${PROJECT_SOURCE_DIR}/config/checkTemplateDepth.cxx
+                COMPILE_DEFINITIONS "-DDEPTH=900") 
+            
+    IF(SUFFICIENT_TEMPLATE_DEPTH)
+        MESSAGE(STATUS "Checking template recursion depth: ok")
+    ELSE()
+        if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+            # As of cmake 2.8.10, there is a variable CMAKE_CXX_COMPILER_VERSION.
+            # Emulate it by a compiler call if not present.
+            IF(NOT CMAKE_CXX_COMPILER_VERSION)
+                exec_program(${CMAKE_CXX_COMPILER}
+                    ARGS ${CMAKE_CXX_COMPILER_ARG1} -dumpversion
+                    OUTPUT_VARIABLE CMAKE_CXX_COMPILER_VERSION)
+                string(REGEX REPLACE "([0-9])\\.([0-9])(\\.[0-9])?" "\\1.\\2"
+                      CMAKE_CXX_COMPILER_VERSION ${CMAKE_CXX_COMPILER_VERSION})
+            endif()
+
+            message ("Detected GCC version ${CMAKE_CXX_COMPILER_VERSION}")
+            if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.4.0")
+                MESSAGE(WARNING "GNU c++ < 4.4 cannot build VIGRANumPy; disabling (found GCC ${CMAKE_CXX_COMPILER_VERSION})")
+                SET(WITH_VIGRANUMPY 0)
+            elseif(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.5.0")
+                # gcc 4.4.x syntax is -ftemplate-depth-900 (not =900)
+                SET(CMAKE_CXX_FLAGS "-ftemplate-depth-900 ${CMAKE_CXX_FLAGS}" CACHE STRING  "Flags used by the compiler during all build types" FORCE)        
+                MESSAGE(STATUS "Checking template recursion depth: using -ftemplate-depth-900")
+            else()
+                # new syntax is =900, not -900
+                SET(CMAKE_CXX_FLAGS "-ftemplate-depth=900 ${CMAKE_CXX_FLAGS}" CACHE STRING  "Flags used by the compiler during all build types" FORCE)        
+                MESSAGE(STATUS "Checking template recursion depth: using -ftemplate-depth=900")
+            endif()
+        else()
+            # clang uses newer gcc syntax
+            SET(CMAKE_CXX_FLAGS "-ftemplate-depth=900 ${CMAKE_CXX_FLAGS}" CACHE STRING  "Flags used by the compiler during all build types" FORCE)        
+            MESSAGE(STATUS "Checking template recursion depth: using -ftemplate-depth=900")
+        endif()
+    ENDIF()
+ENDIF()
 
 ##################################################
 #
@@ -59,11 +87,13 @@ ENDIF ()
 ##################################################
 
 INCLUDE(VigraFindPackage)
-VIGRA_FIND_PACKAGE(TIFF NAMES libtiff)
+VIGRA_FIND_PACKAGE(ZLIB)
+VIGRA_FIND_PACKAGE(TIFF NAMES libtiff_i libtiff) # prefer DLL on Windows
 VIGRA_FIND_PACKAGE(JPEG NAMES libjpeg)
 VIGRA_FIND_PACKAGE(PNG)
 VIGRA_FIND_PACKAGE(FFTW3 NAMES libfftw3-3 libfftw-3.3)
 VIGRA_FIND_PACKAGE(FFTW3F NAMES libfftw3f-3 libfftwf-3.3)
+
 
 IF(WITH_OPENEXR)
     VIGRA_FIND_PACKAGE(OpenEXR)
@@ -73,11 +103,37 @@ IF(WITH_HDF5)
     VIGRA_FIND_PACKAGE(HDF5)
 ENDIF()
 
+set(WITH_BOOST "OFF")
+set(WITH_BOOST_COMPONENTS "")
+
 IF(WITH_BOOST_GRAPH)
-    IF(WITH_VIGRANUMPY)
-        VIGRA_FIND_PACKAGE( Boost 1.40.0 COMPONENTS python )
-    else()
-        VIGRA_FIND_PACKAGE( Boost 1.40.0 )
+    set(WITH_BOOST "ON")
+ENDIF()
+
+IF(WITH_VIGRANUMPY)
+    set(WITH_BOOST "ON")
+    set(WITH_BOOST_COMPONENTS ${WITH_BOOST_COMPONENTS} python)
+ENDIF()
+
+IF(WITH_BOOST_THREAD)
+    set(WITH_BOOST "ON")
+    set(WITH_BOOST_COMPONENTS ${WITH_BOOST_COMPONENTS} thread system date_time chrono)
+    ADD_DEFINITIONS(-DUSE_BOOST_THREAD)
+ENDIF()
+
+IF(WITH_BOOST)
+    VIGRA_FIND_PACKAGE( Boost 1.40.0 COMPONENTS ${WITH_BOOST_COMPONENTS})
+
+    if(Boost_FOUND)
+        INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
+        if(WITH_BOOST_COMPONENTS)
+            # configure boost's autolink magic to use the right library name
+            # (default on Windows is a mangled name like 'boost_python-vc110-mt-1_51.lib')
+            if(("${Boost_PYTHON_LIBRARY}" MATCHES "boost_python\\.lib") OR
+               ("${Boost_SYSTEM_LIBRARY}" MATCHES "boost_system\\.lib"))
+                ADD_DEFINITIONS(-DBOOST_AUTO_LINK_NOMANGLE)
+            endif()
+        endif()
     endif()
 ENDIF()
 
@@ -87,7 +143,7 @@ ENDIF()
 
 SET(DOXYGEN_SKIP_DOT TRUE)
 FIND_PACKAGE(Doxygen)
-FIND_PACKAGE(PythonInterp)
+FIND_PACKAGE(PythonInterp 2)
 
 IF(WITH_VIGRANUMPY)
     FIND_PACKAGE( VIGRANUMPY_DEPENDENCIES )
@@ -96,6 +152,24 @@ ENDIF()
 IF(WITH_VALGRIND)
     FIND_PROGRAM(VALGRIND_EXECUTABLE valgrind)
 ENDIF()
+
+# Must be included AFTER boost is found.
+include(VigraDetectThreading)
+include(VigraConfigureThreading)
+
+# Should come after VigraDetectThreading, since that updates the -std flag.
+include(VigraDetectCppVersion)
+VIGRA_DETECT_CPP_VERSION()
+
+# Put this last, because it can interfere with VigraDetectCppVersion, above.
+FIND_PACKAGE( OpenMP )
+if(OPENMP_FOUND)
+message("OPENMP FOUND")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
+
 
 ##################################################
 #
@@ -129,6 +203,23 @@ ENABLE_TESTING()
 ##################################################
 
 ADD_CUSTOM_TARGET(doc)
+
+# Automatically push the latest documentation to github's gh-pages.
+# This only works when ${DOCDIR} refers to a VIGRA repository that is 
+# checked out in branch 'gh-pages', and the present repository is 
+# in branch 'master' (these conditions are checked in the script).
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+
+    configure_file(${PROJECT_SOURCE_DIR}/config/update-gh-pages.sh.in 
+                   ${PROJECT_BINARY_DIR}/update-gh-pages.sh @ONLY)
+    EXECUTE_PROCESS(COMMAND chmod u+x ${PROJECT_BINARY_DIR}/update-gh-pages.sh OUTPUT_QUIET ERROR_QUIET)
+       
+    ADD_CUSTOM_TARGET(gh-pages 
+          ${PROJECT_BINARY_DIR}/update-gh-pages.sh
+          DEPENDS doc
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+          COMMENT "Pushing documentation to github pages.")
+endif()
 
 ##################################################
 #
@@ -260,6 +351,18 @@ MESSAGE( STATUS "---------------------------------------------------------" )
 MESSAGE( STATUS "VIGRA configuration information:" )
 MESSAGE( STATUS "---------------------------------------------------------" )
 
+IF(ZLIB_FOUND)
+    MESSAGE( STATUS "  Using ZLIB  libraries: ${ZLIB_LIBRARIES}" )
+ELSE()
+    MESSAGE( STATUS "  ZLIB libraries not found (ZLIB support disabled)" )
+ENDIF()
+
+IF(PNG_FOUND)
+    MESSAGE( STATUS "  Using PNG  libraries: ${PNG_LIBRARIES}" )
+ELSE()
+    MESSAGE( STATUS "  PNG libraries not found (PNG support disabled)" )
+ENDIF()
+
 IF(TIFF_FOUND)
     MESSAGE( STATUS "  Using TIFF libraries: ${TIFF_LIBRARIES}" )
 ELSE()
@@ -270,12 +373,6 @@ IF(JPEG_FOUND)
     MESSAGE( STATUS "  Using JPEG libraries: ${JPEG_LIBRARIES}" )
 ELSE()
     MESSAGE( STATUS "  JPEG libraries not found (JPEG support disabled)" )
-ENDIF()
-
-IF(PNG_FOUND)
-    MESSAGE( STATUS "  Using PNG  libraries: ${PNG_LIBRARIES}" )
-ELSE()
-    MESSAGE( STATUS "  PNG libraries not found (PNG support disabled)" )
 ENDIF()
 
 IF(OPENEXR_FOUND)

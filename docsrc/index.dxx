@@ -20,6 +20,8 @@
     <LI> \ref MultiDimensionalArrays
         <BR>&nbsp;&nbsp;&nbsp;<em>Arrays, iterators, and supporting types and functions
              for arbitrary dimensions</em>
+    <LI> \ref GraphDataStructures
+        <BR>&nbsp;&nbsp;&nbsp;<em>Graph-based algorithms (e.g. segmentation) and underlying graph classes (e.g. grid graphs for arbitrary dimensions)</em>
     <LI> \ref ImportExport
         <BR>&nbsp;&nbsp;&nbsp;<em>Conversion from and to other image data types</em>
     <LI> \ref ColorConversions
@@ -106,7 +108,7 @@
     </DL>
 */
 
-/** \page MathFunctionality Mathematical tools
+/** \page MathFunctionality Mathematical Tools
 
     <b>Number types, mathematical constants, special functions, linear algebra</b>
     <p>

@@ -275,6 +275,17 @@ pythonLinearRangeMapping(NumpyArray<N, Multiband<SrcPixelType> > image,
     return res;
 }
 
+template < class SrcPixelType>
+inline NumpyAnyArray
+pythonLinearRangeMapping2D(NumpyArray<3, Multiband<SrcPixelType> > image,
+                           python::object oldRange,
+                           python::object newRange,
+                           NumpyArray<3, Multiband<UInt8> > res)
+{
+    return pythonLinearRangeMapping(image, oldRange, newRange, res);
+}
+
+VIGRA_PYTHON_MULTITYPE_FUNCTOR(pyLinearRangeMapping2D, pythonLinearRangeMapping2D)
 
 template < class PixelType, unsigned int N, class Functor >
 NumpyAnyArray
@@ -311,13 +322,14 @@ NumpyAnyArray pythonApplyColortable(const NumpyArray<2, Singleband<T> >& valueIm
     // Multiband: channel axis is allowed to be singleband, but does not have to be,
     //            will be last when converted Python -> C++ and channel axis is counted in the dimension ('3')
     typedef NumpyArray<2, Singleband<T> > InputType;
-    typedef NumpyArray<3, Multiband<npy_uint8> > OutputType;
     
     res.reshapeIfEmpty(valueImage.taggedShape().setChannelCount(colortable.shape(1)),
                        "pythonApplyColortable: shape of res is wrong");
     
     const unsigned int N = colortable.shape(0);
-   
+
+    bool startsWithTransparent = (colortable(0,3) == 0);
+
     for(MultiArrayIndex c=0; c<colortable.shape(1); ++c)
     {
         MultiArrayView<2, UInt8>::iterator channelIter = res.bind<2>(c).begin();
@@ -327,7 +339,24 @@ NumpyAnyArray pythonApplyColortable(const NumpyArray<2, Singleband<T> >& valueIm
         
         for(typename InputType::const_iterator v = valueImage.begin(); v != valueImage.end(); ++v, ++channelIter)
         {
-            const_cast<UInt8 &>(*channelIter) = ctable[*v % N];
+            if (*v == 0)
+            {
+                *channelIter = ctable[0];
+            }
+            else if (startsWithTransparent)
+            {
+                // Special behavior: If the colortable has too few values for the image,
+                // we simply repeat the table for the higher indexes (see below).
+                // BUT:
+                // It's common for the colortable to start with a transparent value for "background".
+                // In that case, we only repeat the remaining values in the colortable (don't repeat the transparent color)
+                *channelIter = ctable[((*v-1) % (N-1))+1];
+            }
+            else
+            {
+                // Use % to repeat the colortable if there aren't enough values in the colortable.
+                *channelIter = ctable[*v % N];
+            }
         }
     }
     
@@ -353,7 +382,7 @@ void pythonGray2QImage_ARGB32Premultiplied(
     TmpType pixelF;
     
     TmpType normalizeLow, normalizeHigh; 
-    if(normalize != boost::python::object())
+    if(normalize.pyObject() != Py_None)
     {
         vigra_precondition(normalize.shape(0) == 2,
             "gray2qimage_ARGB32Premultiplied(): normalize.shape[0] == 2 required.");
@@ -467,16 +496,18 @@ void defineColors()
 
     docstring_options doc_options(true, true, false);
 
-    multidef("applyColortable", pyApplyColortable<vigra::UInt8, vigra::Int16, vigra::UInt16, vigra::Int32, vigra::UInt32>(),
+    multidef("applyColortable", pyApplyColortable<vigra::Int8, vigra::UInt8, vigra::Int16, vigra::UInt16, vigra::Int32, vigra::UInt32>(),
         (arg("valueImage"), 
         arg("colortable"),
         arg("out")=python::object()), 
         "Applies a colortable to the given 2D valueImage.\n\n"
-        "Colortable must have 4 columns, each row represents a color (for example, RGBA).\n"
-        "Values in valueImage are first taken module the length of the colortable.\n\n"
+        "Colortable must have 4 columns, each row represents a color (for example, RGBA). \n"
+        "Values in valueImage are first taken modulo the length of the colortable. \n"
+        "In the special case where the first color in the table is transparent, that value "
+        "is NOT repeated for values outside the colortable length.\n\n"
         "Returns: uint8 image with 4 channels\n");
     
-    multidef("gray2qimage_ARGB32Premultiplied", pyGray2QImage_ARGB32Premultiplied<vigra::UInt8, vigra::Int16, vigra::UInt16, vigra::Int32, vigra::UInt32, float, double>(),
+    multidef("gray2qimage_ARGB32Premultiplied", pyGray2QImage_ARGB32Premultiplied<vigra::Int8, vigra::UInt8, vigra::Int16, vigra::UInt16, vigra::Int32, vigra::UInt32, float, double>(),
         (arg("image"), 
         arg("qimage"),
         arg("normalize")=python::object()), 
@@ -487,7 +518,7 @@ void defineColors()
         "normalize = numpy.asarray([10, 217], dtype=image.dtype)\n"
         "vigra.colors.gray2qimage_ARGB32Premultiplied(a, qimage2ndarray.byte_view(qimg), normalize)\n");
     
-    multidef("alphamodulated2qimage_ARGB32Premultiplied", pyAlphaModulated2QImage_ARGB32Premultiplied<vigra::UInt8, vigra::Int16, vigra::UInt16, vigra::Int32, vigra::UInt32, float, double>(),
+    multidef("alphamodulated2qimage_ARGB32Premultiplied", pyAlphaModulated2QImage_ARGB32Premultiplied<vigra::Int8, vigra::UInt8, vigra::Int16, vigra::UInt16, vigra::Int32, vigra::UInt32, float, double>(),
         (arg("image"), 
         arg("qimage"),
         arg("tintColor"),
@@ -558,8 +589,7 @@ void defineColors()
          (arg("volume"), arg("gamma"), arg("range")=make_tuple(0.0, 255.0), arg("out")=object()),
          "Likewise for a 3D scalar or multiband volume.\n");
 
-    def("linearRangeMapping",
-         registerConverters(&pythonLinearRangeMapping<float, UInt8, 3>),
+    multidef("linearRangeMapping", pyLinearRangeMapping2D<vigra::Int8, vigra::UInt8, vigra::Int16, vigra::UInt16, vigra::Int32, vigra::UInt32, float, double>(),
          (arg("image"), arg("oldRange")="auto", arg("newRange")=make_tuple(0.0, 255.0), arg("out")=object()),
         "Convert the intensity range of a 2D scalar or multiband image. The function applies a linear transformation "
         "to the intensities such that the value oldRange[0] is mapped onto newRange[0], "
@@ -575,22 +605,22 @@ void defineColors()
         "\n"
         "   range = image.min(), image.max()\n\n"
         "If 'newRange' is None or \"\" or \"auto\", it is set to (0, 255.0). "
-        "If 'out' is explicitly passed, it must be a uin8 image.\n");
+        "If 'out' is explicitly passed, it must be a uint8 image.\n");
 
     def("linearRangeMapping",
          registerConverters(&pythonLinearRangeMapping<float, float, 3>),
          (arg("image"), arg("oldRange")="auto", arg("newRange")=make_tuple(0.0, 255.0), arg("out")=object()),
-         "Likewise, but 'out' is a float32 image.\n");
+         "Likewise, but #in' and 'out' are float32 images.\n");
 
     def("linearRangeMapping",
          registerConverters(&pythonLinearRangeMapping<float, UInt8, 4>),
          (arg("volume"), arg("oldRange")="auto", arg("newRange")=make_tuple(0.0, 255.0), arg("out")=object()),
-         "Likewise for a 3D scalar or multiband volume, when 'out' is a unit8 volume.\n");
+         "Likewise for a 3D scalar or multiband volume, when 'in' is a float32 and 'out' a unit8 volume.\n");
 
     def("linearRangeMapping",
          registerConverters(&pythonLinearRangeMapping<float, float, 4>),
          (arg("volume"), arg("oldRange")="auto", arg("newRange")=make_tuple(0.0, 255.0), arg("out")=object()),
-         "Likewise, but 'out' is a float32 volume.\n");
+         "Likewise, but 'in' and 'out' are float32 volumes.\n");
 
 
     exportColorTransform(RGB2sRGB);

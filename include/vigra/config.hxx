@@ -37,7 +37,7 @@
 #ifndef VIGRA_CONFIG_HXX
 #define VIGRA_CONFIG_HXX
 
-#include "configVersion.hxx"
+#include "config_version.hxx"
 #include <stdexcept>
 
 ///////////////////////////////////////////////////////////
@@ -107,8 +107,8 @@
         #define VIGRA_NO_WORKING_STRINGSTREAM
     #endif
     
-    #if _MSC_VER >= 1600
-        #define VIGRA_HAS_UNIQUE_PTR
+    #if _MSC_VER < 1600
+        #define VIGRA_NO_UNIQUE_PTR
     #endif
     
     #define VIGRA_NEED_BIN_STREAMS
@@ -149,7 +149,7 @@
 //                                                       //
 ///////////////////////////////////////////////////////////
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) && !defined(__clang__)
     #if  __GNUC__ < 2 || ((__GNUC__ == 2) && (__GNUC_MINOR__ <= 8))
         #error "Need at least g++ 2.95"
     #endif
@@ -159,14 +159,60 @@
     #define HAS_HASH_CONTAINERS
     
     // these warnings produce too many false positives to be useful
-    #pragma GCC diagnostic ignored "-Wstrict-aliasing"  
     #pragma GCC diagnostic ignored "-Wshadow"  
     
     #if defined(__GXX_EXPERIMENTAL_CXX0X__) || __cplusplus >= 201103L
-        #define VIGRA_HAS_UNIQUE_PTR
+        #if defined(__APPLE__)
+            #define VIGRA_NO_UNIQUE_PTR
+        #endif
+    #else
+        // C++98 mode.  No native unique_ptr support
+        #define VIGRA_NO_UNIQUE_PTR
+        #define VIGRA_SHARED_PTR_IN_TR1
     #endif
-
 #endif  // __GNUC__
+
+///////////////////////////////////////////////////////////
+//                                                       //
+//                         clang                         //
+//                                                       //
+///////////////////////////////////////////////////////////
+#if defined(__clang__)
+    // In Apple builds of clang, __clang_major__ and __clang_minor__
+    // have totally different values than in other builds of clang.
+    #if defined(__apple_build_version__)
+        // (For Apple builds of clang, __clang_major__ tracks the XCode version.)
+        // For Apple builds, C++11 only works well with libc++, not stdlibc++
+        #define VIGRA_NO_UNIQUE_PTR
+        #if __cplusplus >= 201103L
+            // Must have at least XCode 4 and use libc++ to use std::shared_ptr, etc.
+            // Otherwise, use tr1.
+            #if !((__clang_major__ >= 4) && defined(_LIBCPP_VERSION))
+                #define VIGRA_SHARED_PTR_IN_TR1
+            #endif
+        #else
+            // C++98 mode.  No native unique_ptr support
+            #define VIGRA_NO_UNIQUE_PTR
+            #if !defined(_LIBCPP_VERSION)
+                #define VIGRA_SHARED_PTR_IN_TR1
+            #endif
+        #endif
+    #else
+        // This is a conservative constraint:
+        // Full C++11 support was achieved in clang-3.3,
+        // but most support was available in 3.1 and 3.2
+        #if __cplusplus >= 201103L
+            #if (__clang_major__ < 3) || ((__clang_major__ == 3) && (__clang_minor__ < 3))
+                #define VIGRA_SHARED_PTR_IN_TR1
+                #define VIGRA_NO_UNIQUE_PTR
+            #endif
+        #else
+            // C++98 mode.  No native shared_ptr/unique_ptr support
+            #define VIGRA_NO_UNIQUE_PTR
+            #define VIGRA_SHARED_PTR_IN_TR1
+        #endif
+    #endif
+#endif // __clang__
 
 ///////////////////////////////////////////////////////////
 //                                                       //
@@ -242,10 +288,20 @@
     #define VIGRA_EXPORT
 #endif
 
-#ifdef VIGRA_HAS_UNIQUE_PTR
-#  define VIGRA_UNIQUE_PTR  std::unique_ptr
-#else
+#ifdef VIGRA_NO_UNIQUE_PTR
 #  define VIGRA_UNIQUE_PTR  std::auto_ptr
+#else
+#  ifdef _GLIBCXX_INCLUDE_AS_TR1
+#    define VIGRA_UNIQUE_PTR  std::tr1::unique_ptr
+#  else
+#    define VIGRA_UNIQUE_PTR  std::unique_ptr
+#  endif
+#endif
+
+#ifdef VIGRA_SHARED_PTR_IN_TR1
+#  define VIGRA_SHARED_PTR  std::tr1::shared_ptr
+#else
+#  define VIGRA_SHARED_PTR  std::shared_ptr
 #endif
 
 #ifndef VIGRA_NO_THREADSAFE_STATIC_INIT    

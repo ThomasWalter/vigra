@@ -45,6 +45,12 @@
 #include "metaprogramming.hxx"
 #include "tinyvector.hxx"
 
+#ifdef USE_BOOST_THREAD
+// If boost is available, go ahead and include its tuple implementation
+// to avoid naming conflicts with our own definition of tie(), below.
+#include <boost/tuple/tuple.hpp>
+#endif
+
 #ifdef WITH_BOOST_GRAPH
 
 #  include <boost/tuple/tuple.hpp>
@@ -89,6 +95,8 @@ struct vertex_index_t {};
 
 struct edge_property_tag {};
 
+
+#if 1
 #ifndef BOOST_TUPLE_HPP
 
 // tie() support for std::pair, similar to Boost's one:
@@ -121,6 +129,7 @@ tie(T1& t1, T2& t2)
 {
     return tie_adapter<T1, T2>(t1, t2);
 }
+#endif
 #endif
 
 // graph_traits class template
@@ -157,12 +166,6 @@ struct property_traits
     typedef typename PropMap::reference   reference;
     typedef typename PropMap::category    category;
 };
-
-namespace {
-
-vertex_index_t vertex_index;
-
-} // anonymous namespace
 
 } // namespace boost
 
@@ -276,6 +279,71 @@ inline bool operator!=(Invalid, T const & t)
 } // namespace lemon
 
 namespace vigra {
+
+
+template<class GRAPH,class ITEM>
+struct GraphItemHelper;
+
+template<class GRAPH>
+struct GraphItemHelper<GRAPH,typename GRAPH::Edge>{
+    typedef typename GRAPH::index_type index_type ;
+    typedef typename GRAPH::Edge Item;
+    typedef typename GRAPH::EdgeIt ItemIt;
+
+
+    static index_type maxItemId(const GRAPH & g){
+        return g.maxEdgeId();
+    }
+    static index_type itemNum(const GRAPH & g){
+        return g.edgeNum();
+    }
+    static Item itemFromId(const GRAPH & g,const index_type id){
+        return g.edgeFromId(id);
+    }
+
+};
+
+template<class GRAPH>
+struct GraphItemHelper<GRAPH,typename GRAPH::Node>{
+    typedef typename GRAPH::index_type index_type ;
+    typedef typename GRAPH::Node Item;
+    typedef typename GRAPH::NodeIt ItemIt;
+
+
+    static index_type maxItemId(const GRAPH & g){
+        return g.maxNodeId();
+    }
+    static index_type itemNum(const GRAPH & g){
+        return g.nodeNum();
+    }
+    static Item itemFromId(const GRAPH & g,const index_type id){
+        return g.nodeFromId(id);
+    }
+};
+
+
+template<class GRAPH>
+struct GraphItemHelper<GRAPH,typename GRAPH::Arc>{
+    typedef typename GRAPH::index_type index_type ;
+    typedef typename GRAPH::Arc Item;
+    typedef typename GRAPH::ArcIt ItemIt;
+
+
+    static index_type maxItemId(const GRAPH & g){
+        return g.maxArcId();
+    }
+    static index_type itemNum(const GRAPH & g){
+        return g.arcNum();
+    }
+    static Item itemFromId(const GRAPH & g,const index_type id){
+        return g.arcFromId(id);
+    }
+};
+
+
+
+
+
 namespace lemon_graph { 
 
 // vigra::lemon_graph contains algorithms that are compatible to the LEMON graph library

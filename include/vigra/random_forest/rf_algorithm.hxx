@@ -32,8 +32,8 @@
 /*    OTHER DEALINGS IN THE SOFTWARE.                                   */
 /*                                                                      */
 /************************************************************************/
+#ifndef VIGRA_RF_ALGORITHM_HXX
 #define VIGRA_RF_ALGORITHM_HXX
-
 #include <vector>
 #include "splices.hxx"
 #include <queue>
@@ -163,7 +163,7 @@ class VariableSelectionResult
         bool ret_ = init(all_features, response, errorcallback); 
         if(!ret_)
             return false;
-        vigra_precondition(std::distance(b, e) == (std::ptrdiff_t)selected.size(),
+        vigra_precondition(std::distance(b, e) == static_cast<std::ptrdiff_t>(selected.size()),
                            "Number of features in ranking != number of features matrix");
         std::copy(b, e, selected.begin());
         return true;
@@ -305,7 +305,7 @@ void forward_selection(FeatureT          const & features,
     {
         //result is being reused just ensure that the number of features is
         //the same.
-        vigra_precondition((int)selected.size() == featureCount,
+        vigra_precondition(static_cast<int>(selected.size()) == featureCount,
                            "forward_selection(): Number of features in Feature "
                            "matrix and number of features in previously used "
                            "result struct mismatch!");
@@ -408,7 +408,7 @@ void backward_elimination(FeatureT              const & features,
     {
         //result is being reused just ensure that the number of features is
         //the same.
-        vigra_precondition((int)selected.size() == featureCount,
+        vigra_precondition(static_cast<int>(selected.size()) == featureCount,
                            "backward_elimination(): Number of features in Feature "
                            "matrix and number of features in previously used "
                            "result struct mismatch!");
@@ -504,7 +504,7 @@ void rank_selection      (FeatureT              const & features,
     {
         //result is being reused just ensure that the number of features is
         //the same.
-        vigra_precondition((int)selected.size() == featureCount,
+        vigra_precondition(static_cast<int>(selected.size()) == featureCount,
                            "forward_selection(): Number of features in Feature "
                            "matrix and number of features in previously used "
                            "result struct mismatch!");
@@ -734,7 +734,6 @@ public:
     {
         MultiArray<2, T> dist(distance); 
         std::vector<std::pair<int, int> > addr; 
-        typedef std::pair<int, int>  Entry;
         int index = 0;
         for(int ii = 0; ii < distance.shape(0); ++ii)
         {
@@ -823,7 +822,7 @@ public:
             }
             //update distances;
             
-            for(int jj = 0 ; jj < (int)addr.size(); ++jj)
+            for(int jj = 0 ; jj < static_cast<int>(addr.size()); ++jj)
             {
                 if(jj == ii_keep)
                     continue;
@@ -1338,3 +1337,4 @@ void get_ranking(Array1 const & in, Vector1 & out)
 }//namespace algorithms
 }//namespace rf
 }//namespace vigra
+#endif //VIGRA_RF_ALGORITHM_HXX

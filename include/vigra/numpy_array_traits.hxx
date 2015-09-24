@@ -43,7 +43,6 @@
 #include "numerictraits.hxx"
 #include "multi_array.hxx"
 #include "numpy_array_taggedshape.hxx"
-
 namespace vigra {
 
 /********************************************************/
@@ -111,6 +110,7 @@ struct NumpyArrayValuetypeTraits<type > \
         return PyArray_TypeObjectFromType(typeID); \
     } \
 };
+
 
 VIGRA_NUMPY_VALUETYPE_TRAITS(bool,           NPY_BOOL, bool, "UINT8")
 VIGRA_NUMPY_VALUETYPE_TRAITS(signed char,    NPY_INT8, int8, "INT16")
@@ -191,7 +191,6 @@ struct NumpyArrayTraits<N, T, StridedArrayTag>
 
     static bool isShapeCompatible(PyArrayObject * array) /* array must not be NULL */
     {
-        PyObject * obj = (PyObject *)array;
         int ndim = PyArray_NDIM(array);
 
         return ndim == N;

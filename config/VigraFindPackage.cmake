@@ -27,9 +27,7 @@ MACRO(VIGRA_FIND_PACKAGE package)
         endif()
     endforeach(i)
 
-    foreach(name ${NAMES})
-        SET(${package}_NAMES ${package}_NAMES ${name})
-    endforeach(name)
+    SET(${package}_NAMES ${NAMES} ${${package}_NAMES})
 
     IF(DEFINED COMPONENTS)
         SET(COMPONENTS COMPONENTS ${COMPONENTS})
@@ -51,7 +49,11 @@ MACRO(VIGRA_FIND_PACKAGE package)
                 ELSE()
                     SET(BOOST_INCLUDEDIR ${path}/include) # standard include path
                 ENDIF()
-                SET(BOOST_LIBRARYDIR ${path}/lib)
+                IF(EXISTS "${path}/stage/lib")
+                    SET(BOOST_LIBRARYDIR ${path}/stage/lib) # boost's default library path
+                ELSE()
+                    SET(BOOST_LIBRARYDIR ${path}/lib) # standard library path
+                ENDIF()
             ELSE()
                 SET(CMAKE_INCLUDE_PATH ${path}/include)
                 SET(CMAKE_LIBRARY_PATH ${path}/lib)

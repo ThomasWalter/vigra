@@ -36,6 +36,7 @@
 #ifndef VIGRA_MULTI_SHAPE_HXX
 #define VIGRA_MULTI_SHAPE_HXX
 
+#include "multi_fwd.hxx"
 #include <sys/types.h>
 #include "tinyvector.hxx"
 #include "array_vector.hxx"
@@ -43,16 +44,9 @@
 
 namespace vigra {
 
-/** \addtogroup MultiIteratorGroup  Multi-dimensional Shapes and Array Iterators
-
-    \brief Shape objects and general iterators for arrays of arbitrary dimension.
+/** \addtogroup MultiIteratorGroup
 */
 //@{
-
-    /** Index type for a single dimension of a MultiArrayView or
-        MultiArray.
-    */
-typedef std::ptrdiff_t MultiArrayIndex;
 
 /********************************************************/
 /*                                                      */
@@ -69,6 +63,21 @@ struct Singleband  // the resulting MultiArray has no explicit channel axis
 
 template <class T>
 struct Multiband  // the last axis is explicitly designated as channel axis
+{
+    typedef T value_type;
+};
+
+// check if a type is a multiband type
+template<class T>
+struct IsMultiband : VigraFalseType{
+};
+
+template<class T>
+struct IsMultiband<Multiband<T> > : VigraTrueType{
+};
+
+template <class T>
+struct ChunkedMemory  // the array is organised in chunks
 {
     typedef T value_type;
 };
@@ -165,7 +174,7 @@ defaultMultibandStride(const TinyVector <MultiArrayIndex, N> &shape)
 
 /********************************************************/
 /*                                                      */
-/*                  ResolveMultiband                    */
+/*       resolve Multiband and ChunkedMemory tags       */
 /*                                                      */
 /********************************************************/
 
@@ -214,15 +223,19 @@ struct ResolveMultiband<Multiband<T> >
     }
 };
 
+template <class T>
+struct ResolveChunkedMemory
+{
+    typedef T type;
+};
+
+template <class T>
+struct ResolveChunkedMemory<ChunkedMemory<T> >
+{
+    typedef T type;
+};
+
 } // namespace detail
-
-template <unsigned int N, class T, class C = StridedArrayTag>
-class MultiArrayView;
-
-template <unsigned int N, class T, 
-          class A = std::allocator<typename vigra::detail::ResolveMultiband<T>::type> >
-class MultiArray;
-
 
     /** Traits class for the difference type of all MultiIterator, MultiArrayView, and
         MultiArray variants.
@@ -243,16 +256,82 @@ typedef MultiArrayShape<3>::type Shape3; ///< shape type for MultiArray<3, T>
 typedef MultiArrayShape<4>::type Shape4; ///< shape type for MultiArray<4, T>
 typedef MultiArrayShape<5>::type Shape5; ///< shape type for MultiArray<5, T>
 
-    /** \brief Choose the neighborhood system in a dimension-independent way.  
-    
-        DirectNeighborhood corresponds to 4-neighborhood in 2D and 6-neighborhood in 3D, whereas
-        IndirectNeighborhood means 8-neighborhood in 2D and 26-neighborhood in 3D. The general
-        formula for N dimensions are 2*N for direct neighborhood and 3^N-1 for indirect neighborhood. 
-    */
-enum NeighborhoodType { 
-        DirectNeighborhood=0,   ///< use only direct neighbors
-        IndirectNeighborhood=1  ///< use direct and indirect neighbors
+namespace detail
+{
+
+/********************************************************/
+/*                                                      */
+/*                default chunk shapes                  */
+/*                                                      */
+/********************************************************/
+
+template <unsigned int N, class T = int>
+struct ChunkShape
+{
+    typedef typename MultiArrayShape<N>::type Shape;
+    static Shape defaultShape()
+    {
+        Shape res(1);
+        res.template subarray<0,5>() = ChunkShape<5,T>::defaultShape();
+        return res;
+    }
 };
+
+template <class T>
+struct ChunkShape<0, T>
+{
+    static Shape1 defaultShape()
+    {
+        return Shape1(1);
+    }
+};
+
+template <class T>
+struct ChunkShape<1, T>
+{
+    static Shape1 defaultShape()
+    {
+        return Shape1(1 << 18);
+    }
+};
+
+template <class T>
+struct ChunkShape<2, T>
+{
+    static Shape2 defaultShape()
+    {
+        return Shape2(1 << 9, 1 << 9);
+    }
+};
+
+template <class T>
+struct ChunkShape<3, T>
+{
+    static Shape3 defaultShape()
+    {
+        return Shape3(1 << 6, 1 << 6, 1 << 6);
+    }
+};
+
+template <class T>
+struct ChunkShape<4, T>
+{
+    static Shape4 defaultShape()
+    {
+        return Shape4(1 << 6, 1 << 6, 1 << 4, 1 << 2);
+    }
+};
+
+template <class T>
+struct ChunkShape<5, T>
+{
+    static Shape5 defaultShape()
+    {
+        return Shape5(1 << 6, 1 << 6, 1 << 4, 1 << 2, 1 << 2);
+    }
+};
+
+} // namespace detail
 
 // Helper functions
 
@@ -450,7 +529,7 @@ struct RelativeToAbsoluteCoordinate<0>
 template <unsigned int N, unsigned int DIMENSION=N-1>
 struct BorderTypeImpl
 {
-    typedef typename MultiArrayShape<N>::type shape_type;
+    typedef TinyVectorView<MultiArrayIndex, N> shape_type;
     
     static unsigned int exec(shape_type const & point, shape_type const & shape)
     {
@@ -466,7 +545,7 @@ struct BorderTypeImpl
 template <unsigned int N>
 struct BorderTypeImpl<N, 0>
 {
-    typedef typename MultiArrayShape<N>::type shape_type;
+    typedef TinyVectorView<MultiArrayIndex, N> shape_type;
     static const unsigned int DIMENSION = 0;
     
     static unsigned int exec(shape_type const & point, shape_type const & shape)

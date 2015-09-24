@@ -56,10 +56,9 @@ namespace vigra {
         desc.fileType = "PNM";
 
         // init pixel types
-        desc.pixelTypes.resize(3);
+        desc.pixelTypes.resize(2);
         desc.pixelTypes[0] = "UINT8";
         desc.pixelTypes[1] = "UINT16";
-        desc.pixelTypes[2] = "UINT32";
 
         // init compression types
         desc.compressionTypes.resize(3);
@@ -403,7 +402,7 @@ namespace vigra {
 
     void PnmDecoder::init( const std::string & filename )
     {
-        pimpl = new PnmDecoderImpl( filename.c_str() );
+        pimpl = new PnmDecoderImpl( filename );
     }
 
     PnmDecoder::~PnmDecoder()
@@ -743,10 +742,7 @@ namespace vigra {
     void PnmEncoderImpl::write_bilevel_raw()
     {
         // cast the bands to the correct type
-        typedef void_vector< UInt8 > vector_type;
-        //vector_type & cbands = static_cast< vector_type & >(bands);
-
-        // XXX
+        vigra_fail("PNM write bilevel raw is not implemented, sorry.");
     }
 
     void PnmEncoderImpl::write_raw()

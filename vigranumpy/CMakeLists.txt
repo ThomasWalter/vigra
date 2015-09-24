@@ -6,12 +6,6 @@ IF(VIGRANUMPY_DEPENDENCIES_FOUND)
     FILE(MAKE_DIRECTORY ${vigranumpy_tmp_dir})
 
     INCLUDE_DIRECTORIES(${VIGRANUMPY_INCLUDE_DIRS})
-
-    # configure boost's autolink magic to use the right library name
-    # (default on Windows is a mangled name like 'boost_python-vc110-mt-1_51.lib')
-    if("${Boost_PYTHON_LIBRARY}" MATCHES "boost_python\\.lib")
-        ADD_DEFINITIONS(-DBOOST_AUTO_LINK_NOMANGLE)
-    endif()
         
     IF(HDF5_FOUND)
         ADD_DEFINITIONS(-DHasHDF5 ${HDF5_CPPFLAGS})
@@ -63,8 +57,14 @@ IF(VIGRANUMPY_DEPENDENCIES_FOUND)
     
     set(VIGRANUMPY_LIBRARIES_RELATIVE "")
     foreach(PATH ${VIGRANUMPY_LIBRARIES})
-        file(RELATIVE_PATH RELPATH ${CMAKE_INSTALL_PREFIX}/${VIGRANUMPY_CONFIG_INSTALL_PATH} ${PATH})
-        set(VIGRANUMPY_LIBRARIES_RELATIVE ${VIGRANUMPY_LIBRARIES_RELATIVE} ${RELPATH})
+        if(EXISTS ${PATH})
+            file(RELATIVE_PATH RELPATH ${CMAKE_INSTALL_PREFIX}/${VIGRANUMPY_CONFIG_INSTALL_PATH} ${PATH})
+            set(VIGRANUMPY_LIBRARIES_RELATIVE ${VIGRANUMPY_LIBRARIES_RELATIVE} ${RELPATH})
+        else()
+            # If ${PATH} is not referring to a path, it is probably a keyword like 
+            # "optimized" or "debug" (e.g. on the Mac). We then pass it on unchanged. 
+            set(VIGRANUMPY_LIBRARIES_RELATIVE ${VIGRANUMPY_LIBRARIES_RELATIVE} ${PATH})
+        endif()
     endforeach(PATH)
     
     CONFIGURE_FILE(${PROJECT_SOURCE_DIR}/config/VigranumpyConfig.cmake.in

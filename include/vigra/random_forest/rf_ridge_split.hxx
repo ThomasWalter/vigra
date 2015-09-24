@@ -135,7 +135,6 @@ class RidgeSplit: public SplitBase<Tag>
     {
 
     //std::cerr << "Split called" << std::endl;
-    typedef typename Region::IndexIterator IndexIterator;
     typedef typename MultiArrayView <2, T, C>::difference_type fShape;
     typedef typename MultiArrayView <2, T2, C2>::difference_type lShape;
     typedef typename MultiArrayView <2, double>::difference_type dShape;
@@ -168,7 +167,7 @@ class RidgeSplit: public SplitBase<Tag>
     MultiArray<2, T2> labels(lShape(multiClassLabels.shape(0),1));
       //number of classes should be >1, otherwise makeTerminalNode would have been called
       int nNumClasses=0;
-      for(int n=0; n<(int)region.classCounts().size(); n++)
+      for(int n=0; n<static_cast<int>(region.classCounts().size()); n++)
         nNumClasses+=((region.classCounts()[n]>0) ? 1:0);
       
       //convert to binary case
@@ -176,7 +175,7 @@ class RidgeSplit: public SplitBase<Tag>
       {
         int nMaxClass=0;
         int nMaxClassCounts=0;
-        for(int n=0; n<(int)region.classCounts().size(); n++)
+        for(int n=0; n<static_cast<int>(region.classCounts().size()); n++)
         {
           //this should occur in any case:
           //we had more than two non-zero classes in order to get here
